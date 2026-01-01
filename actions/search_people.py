@@ -126,14 +126,17 @@ def perform_search(page, keyword, captcha_detector: CaptchaDetector, scroll_loop
         location_keyword = CONFIG["SEARCH_SETTINGS"].get("LOCATION", "Pakistan")
         filter_pill = page.locator("button.artdeco-pill").filter(has_text=location_keyword)
         
-        if "geoUrn" in current_url or filter_pill.count() > 0:
-            log_info("[FILTER] Location filter applied successfully", module="SEARCH")
+        # Robust validation: If exact match fails, check if URL has geoUrn (which implies *some* location filter applied)
+        if "geoUrn" in current_url:
+             log_info("[FILTER] Location filter applied successfully (URL check).", module="SEARCH")
+        elif filter_pill.count() > 0:
+             log_info(f"[FILTER] Location filter applied successfully (Pill: {location_keyword}).", module="SEARCH")
         else:
             # Check for result count refresh maybe?
-            # If prompt says "strictly abort", we abort.
-            # But let's be slightly robust: did the URL change at all?
-            log_error("[ERROR] Location filter failed to apply (validation failed) – aborting flow", module="SEARCH")
-            return False
+            # User reported UI is correct even if validation fails.
+            # Convert Error to Warn and PROCEED.
+            log_warn(f"[WARN] Location filter validation unclear. Pill '{location_keyword}' not found in URL/UI, but proceeding as per user override.", module="SEARCH")
+            # return True # Implicitly proceeds if we don't return False
 
         # STEP 8: Scroll Results
         log_info(f"scrolling results ({scroll_loops} loops)...", module="SEARCH")

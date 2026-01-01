@@ -12,38 +12,35 @@ def send_connection_request(page, note, rate_limiter: RateLimiter):
          return False
 
     try:
-        # 1. Click Connect
-        # Try finding the Connect button. It might be:
-        # - Primary action "Connect"
-        # - Inside "More" dropdown
+        # 1. Click Connect using Robust Fallback Strategy
+        connect_btn = _find_connect_button(page)
         
-        # Primary "Connect" button logic
-        connect_btn = page.locator('button').filter(has_text=re.compile(r"^Connect$", re.IGNORECASE))
-        
-        if not connect_btn.first.is_visible():
+        if not connect_btn:
              # Check for "More" button -> "Connect"
-             more_btn = page.locator('button').filter(has_text="More")
-             if more_btn.first.is_visible():
-                 more_btn.first.click()
+             # "More" is usually an accessible button with name "More actions" or similar
+             more_btn = page.get_by_role("button", name="More actions").first
+             if not more_btn.is_visible():
+                 more_btn = page.locator("button[aria-label='More actions']").first
+             if not more_btn.is_visible():
+                 more_btn = page.locator("button").filter(has_text="More").first
+                 
+             if more_btn.is_visible():
+                 more_btn.click()
                  random_delay("ACTION")
                  # Look for Connect in dropdown
-                 # Broader selector with whitespace tolerance
-                 connect_in_more = page.locator('div[role="button"], span, li, div').filter(has_text=re.compile(r"^\s*Connect\s*$", re.IGNORECASE))
-                 if connect_in_more.first.is_visible():
-                     connect_in_more.first.click()
-                     connect_btn = connect_in_more # Found it
+                 # Dropdown items often have role="button" or are inside a list
+                 connect_in_more = _find_connect_button_in_menu(page)
+                 
+                 if connect_in_more:
+                     connect_in_more.click()
                  else:
-                     log_info("Connect option not found in More menu. Dumping HTML...", module="CONNECT")
-                     try:
-                         with open("debug_profile_more_menu.html", "w", encoding="utf-8") as f:
-                             f.write(page.content())
-                     except: pass
+                     log_info("Connect option not found in More menu.", module="CONNECT")
                      return False
              else:
-                 log_info("Connect button not found", module="CONNECT")
+                 log_info("Connect button not found (Primary or More)", module="CONNECT")
                  return False
         else:
-             connect_btn.first.click()
+             connect_btn.click()
 
         random_delay("ACTION")
         
@@ -124,3 +121,39 @@ def send_connection_request(page, note, rate_limiter: RateLimiter):
     except Exception as e:
         log_error(f"Connection failed: {e}", module="CONNECT")
         return False
+
+def _find_connect_button(container):
+    """
+    Finds the Connect button using accessibility > text fallback chain.
+    """
+    # 1. Role + Name (Best)
+    # Note: 'Connect' is the ideal name. Sometimes 'Connect with [Name]'
+    btn = container.get_by_role("button", name=re.compile(r"^Connect", re.IGNORECASE)).first
+    if btn.is_visible() and "Connect" in btn.inner_text(): 
+        return btn
+
+    # 2. Aria Label
+    btn = container.locator("button[aria-label^='Connect']").first
+    if btn.is_visible(): return btn
+
+    # 3. Text content (Fallback)
+    # Exclude "Connected", "Disconnect"
+    btn = container.locator("button").filter(has_text=re.compile(r"^Connect(?!ed|ing)", re.IGNORECASE)).first
+    if btn.is_visible(): return btn
+    
+    return None
+
+def _find_connect_button_in_menu(page):
+    """
+    Finds connect button specifically in the open dropdown menu.
+    """
+    # Menu items often have role="button" inside a role="menu" or similar container
+    # We search somewhat globally but prioritizing visible elements
+    
+    # 1. Text with loose match in commonly used dropdown item tags
+    # We want to match "Connect" but avoid "Remove Connection"
+    candidates = page.locator("div[role='button'], li, span").filter(has_text=re.compile(r"^Connect(?!ed|ing)", re.IGNORECASE)).all()
+    for c in candidates:
+        if c.is_visible(): return c
+        
+    return None

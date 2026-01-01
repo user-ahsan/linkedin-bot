@@ -64,7 +64,7 @@ CONFIG = {
         "SCROLL_LOOPS": 2,           # Scrolls per search page
         "MAX_PROFILES_PER_SEARCH": 5,# Visit limit per keyword cycle
         "MAX_CONNECTIONS_PER_SEARCH": 3,
-        "LOCATION": "Saudia Arabia",      # Default location filter
+        "LOCATION": "Saudi Arabia",      # Default location filter
     },
 
     "RUN_MODE": "ALL", # Options: "ALL", "FEED_ONLY", "SEARCH_ONLY"
@@ -73,6 +73,7 @@ CONFIG = {
         "MAX_SCROLLS": 2,            # Limit scroll depth on profile
         "SAFE_MODE": True,           # If True, minimizes clicks (no "show more" expansion)
         "MIN_WAIT": 3,               # Min reading time per section
+        "WAIT_TIMEOUT": 15000,       # Timeout for page loads/selectors
     }
 }
 

@@ -15,6 +15,7 @@ from core.scheduler import Scheduler
 from core.rate_limiter import RateLimiter
 from core.captcha_detector import CaptchaDetector
 from core.notifier import Notifier
+from core.human_actions import human_scroll
 from storage.sheets_client import SheetsClient
 
 from actions.feed_actions import run_feed_cycle
@@ -137,100 +138,130 @@ def main():
                     # -------------------------------
                     # Collect profiles
                     try:
-                        # Wait for results to be visible (Any common marker)
-                        page.wait_for_selector("li.reusable-search__result-container, [data-test-app-aware-link]", timeout=30000)
-                    except Exception as e:
-                        log_warn(f"No results found on page {page_num} (Timeout: {e}). Ending pagination for {keyword}.", module="MAIN")
-                        break
-
-                    # Precise Selector: Only get the TITLE link of the result.
-                    # This avoids "Mutual connection" links or extraction of non-target profiles.
-                    links = page.locator("span.entity-result__title-text a.app-aware-link").all()
-                    
-                    # Robust Fallback (if title text structure changes, fall back to container logic)
-                    if not links:
-                         log_warn("Standard title links not found, falling back to broad search.", module="MAIN")
-                         links = page.locator("li.reusable-search__result-container a.app-aware-link").all()
-
-                    # Deduplicate links in current view
-                    # Filter for specific profile links
-                    valid_links = []
-                    for link in links:
+                        # Wait for results to be visible
+                        # We try a few common containers. 
+                        # If specific classes fail, we wait for ANY link that looks like a profile
                         try:
-                             href = link.get_attribute("href")
-                             if href:
-                                 # Normalize FIRST before check
-                                 clean_url = href.split("?")[0].rstrip("/")
-                                 if "/in/" in clean_url and "linkedin.com" in clean_url:
-                                     valid_links.append(link)
-                        except: continue
-                    
-                    # Unique by Href
-                    unique_links = {}
-                    for link in valid_links:
-                        h = link.get_attribute("href").split('?')[0]
-                        if h not in unique_links:
-                            unique_links[h] = link
-                    
-                    final_links = list(unique_links.values())
-                    count_found = len(final_links)
-                    log_info(f"Found {count_found} profiles on page {page_num}.", module="MAIN")
-                    
-                    if count_found == 0:
-                        log_info("Zero valid profiles found. Ending pagination.", module="MAIN")
-                        break
-
-                    # Loop through profiles on this page
-                    for link in final_links:
-                        # 1. URL Normalization & Dupe Check
-                        raw_url = link.get_attribute("href")
-                        url = raw_url.split("?")[0].rstrip("/")
+                            page.wait_for_selector("ul.reusable-search__entity-result-list, .search-results-container, div.entity-result, a[href*='/in/']", timeout=15000)
+                        except:
+                            log_warn("Standard selectors timed out. Checking for page content...", module="MAIN")
                         
-                        if sheets_client.is_profile_processed(url):
-                             log_info(f"Skipping (Dup): {url}", module="MAIN")
-                             continue
-                        
-                        # 2. STRICT CONNECT CHECK (No Visit if not Connect)
-                        # Find container
-                        try:
-                             # Flexible Ancestor Search
-                             container = link.locator("xpath=./ancestor::li[contains(@class, 'reusable-search__result-container')] | ./ancestor::div[contains(@class, 'entity-result')]")
-                             if container.count() > 0:
-                                 container = container.first # Take the closest one if ambiguous
-                                 
-                                 # Get all visible buttons in actions area
-                                 # .entity-result__actions is standard, but fallback to just 'button' in container
-                                 actions_area = container.locator(".entity-result__actions")
-                                 if actions_area.count() == 0:
-                                      actions_area = container # Fallback to search whole container
-                                 
-                                 # If we have a "Connect" button, we proceed.
-                                 # If we see "Message", "Follow", "Pending", we skip.
-                                 
-                                 # Get all text from buttons to debug
-                                 all_buttons_text = actions_area.locator("button").all_inner_texts()
-                                 
-                                 # Check if "Connect" is in any of the button texts
-                                 # STRICT CHECK: Ensure it is "Connect" and not "Connected"
-                                 # we look for pure "Connect" or "Connect" with whitespace
-                                 has_connect = False
-                                 for btn_text in all_buttons_text:
-                                     clean_text = btn_text.strip().lower()
-                                     # Exact match for "connect" to avoid "connected" or "pending" (if logic changes)
-                                     if clean_text == "connect":
-                                         has_connect = True
-                                         break
-
-                                 if not has_connect:
-                                      log_info(f"Skipping (No Connect Button). Found: {all_buttons_text}. URL: {url}", module="MAIN")
-                                      continue
-                                 
-                        except Exception as e:
-                             log_warn(f"Button check failed: {e}. Skipping safely.", module="MAIN")
-                             continue
+                        # Verify we actually have results by looking for profile links
+                        # This is the ultimate fallback: if there are profile links, we have results.
+                        profile_links_count = page.locator("a[href*='/in/']").count()
+                        if profile_links_count == 0:
+                             log_warn(f"No profile links found on page {page_num}.", module="MAIN")
+                             break
                              
-                        # 3. Visit & Connect
+                    except Exception as e:
+                        log_warn(f"Error checking results page {page_num}: {e}", module="MAIN")
+                        break
+
+                    # ---------------------------------------------------------
+                    # SCAN STEP: Identify Candidates with "Connect" buttons
+                    # ---------------------------------------------------------
+                    candidates = []
+                    
+                    # Get all result containers (more stable than getting links first)
+                    # We look for the main list items
+                    # Try explicit list item selector first
+                    results = page.locator("ul.reusable-search__entity-result-list > li").all()
+                    
+                    if not results:
+                        results = page.locator("div[data-view-name='people-search-result']").all()
+
+                    if not results:
+                        # Fallback: custom list item role
+                        # results = page.get_by_role("list").filter(has=page.locator("a[href*='/in/']")).first.get_by_role("listitem").all()
+                        # Revert: The listitem role might be catching filtered out visible items or wrong lists
+                        # Using the explicit class is safer for the *Container* identification
+                        results = page.locator("ul.reusable-search__entity-result-list > li, li.reusable-search__result-container, div[data-view-name='people-search-result']").all()
+
+                    log_info(f"Scanning {len(results)} results for 'Connect' buttons...", module="MAIN")
+                    
+                    for res in results:
+                        try:
+                            # 1. Extract URL (Robust)
+                            link_el = res.locator("a[href*='/in/']").first
+                            
+                            if not link_el.is_visible(): continue
+                            
+                            raw_url = link_el.get_attribute("href")
+                            if not raw_url: continue
+                            
+                            url = raw_url.split("?")[0].rstrip("/")
+                            if "/in/" not in url or "linkedin.com" not in url:
+                                if url.startswith("/in/"):
+                                    url = "https://www.linkedin.com" + url
+                                else:
+                                    continue
+                            
+                            if sheets_client.is_profile_processed(url):
+                                continue
+
+                            # 2. Check for "Connect" Button (Accessible + Fallback)
+                            has_connect = False
+                            
+                            # Strategy A: Role "button" (Standard accessibility)
+                            if res.get_by_role("button", name=re.compile(r"^Connect", re.IGNORECASE)).count() > 0:
+                                has_connect = True
+                                
+                            # Strategy B: Role "link" (LinkedIn often uses <a> for actions)
+                            elif res.get_by_role("link", name=re.compile(r"^Connect", re.IGNORECASE)).count() > 0:
+                                has_connect = True
+                                
+                            # Strategy C: Explicit Element Attributes (Aria-Label) on button OR link
+                            if not has_connect:
+                                if res.locator("button[aria-label^='Connect'], a[aria-label^='Connect']").count() > 0:
+                                    has_connect = True
+
+                            # Strategy D: Text Content (Fallback for stubborn elements)
+                            if not has_connect:
+                                # Look for "Connect" text but strictly avoid "Connected", "Disconnect"
+                                # We check both button and a tags.
+                                candidates_btn = res.locator("button, a").filter(has_text=re.compile(r"Connect", re.IGNORECASE)).all()
+                                for b in candidates_btn:
+                                    if b.is_visible():
+                                        t = b.inner_text().strip()
+                                        # Strict check: "Connect" must be distinct
+                                        # e.g. "Connect", "Connect with John", but NOT "Connected"
+                                        if "Connect" in t and "Connected" not in t and "Pending" not in t and "Message" not in t:
+                                            has_connect = True
+                                            break
+
+                            if has_connect:
+                                candidates.append(url)
+
+                        except Exception as e:
+                            log_warn(f"Error scanning result item: {e}", module="MAIN")
+                            continue
+                            
+                    log_info(f"Found {len(candidates)} connectable profiles on this page.", module="MAIN")
+
+                    if not candidates:
+                        log_info("No candidates found, scrolling/moving to next page.", module="MAIN")
+                        # Optional: Scroll one more time just in case? 
+                        human_scroll(page)
+                    
+                    # ---------------------------------------------------------
+                    # ACTION STEP: Process Candidates
+                    # ---------------------------------------------------------
+                    
+                    # Store current Search URL to return to
+                    search_page_url = page.url
+                    
+                    for i, url in enumerate(candidates):
+                         # Double check limits
+                        count_visits = state_manager.get_var("daily_visits_count", 0) # Just an example, or rely on rate_limiter
+                        # Actually rate_limiter handles simple counts, but let's check config limits
+                        
+                        if count_visits >= CONFIG["LIMITS"]["PROFILE_VISITS_PER_DAY"]:
+                            log_warn("Daily visit limit reached. Stopping search.", module="MAIN")
+                            break
+
+                        # Visit
                         if rate_limiter.can_perform("profile_visits"):
+                            log_info(f"[{i+1}/{len(candidates)}] Processing: {url}", module="MAIN")
                             visited = visit_profile(page, url, captcha_detector)
                             if visited:
                                 rate_limiter.increment("profile_visits")
@@ -251,7 +282,20 @@ def main():
                                     status = "SENT" if sent else "SKIPPED/FAILED"
                                     sheets_client.append_profile_request(data, note, status)
                                 
-                        time.sleep(random.randint(3, 7))
+                        # Random delay between profiles
+                        time.sleep(random.randint(5, 10))
+
+                    # End of Page Processing
+                    # Restore Search Context for Next Page Navigation
+                    log_info("Restoring search context...", module="MAIN")
+                    try:
+                        page.goto(search_page_url, wait_until='domcontentloaded')
+                        time.sleep(3)
+                    except Exception as nav_e:
+                        log_warn(f"Failed to restore search context: {nav_e}", module="MAIN")
+                    
+                    # We continue loop to next page_num
+
 
                 # Update index ONLY after finishing all pages for this keyword
                 state_manager.set_var("search_term_index", idx + 1)

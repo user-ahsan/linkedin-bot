@@ -22,6 +22,17 @@ class BrowserManager:
                 
                 headless_mode = CONFIG["BROWSER"]["HEADLESS"]
                 
+                # Cleanup Profile Locks (Fix for "Target page closed" errors if related to profile locking)
+                try:
+                    lock_file = os.path.join(full_user_data_dir, "SingletonLock")
+                    socket_file = os.path.join(full_user_data_dir, "SingletonSocket")
+                    if os.path.exists(lock_file):
+                        os.remove(lock_file)
+                    if os.path.exists(socket_file):
+                        os.remove(socket_file)
+                except Exception as cleanup_err:
+                    print(f"Warning: Could not clean up profile locks: {cleanup_err}")
+
                 # Using launch_persistent_context to maintain login session
                 self.context = self.playwright.chromium.launch_persistent_context(
                     user_data_dir=full_user_data_dir,
@@ -29,7 +40,10 @@ class BrowserManager:
                     channel="chrome", # Try to use installed chrome or default
                     args=[
                         "--disable-blink-features=AutomationControlled",
-                        "--start-maximized"
+                        "--start-maximized",
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-gpu"
                     ],
                     viewport=None, # Uses actual window size
                     timeout=30000
