@@ -1,0 +1,48 @@
+
+# Python internals
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+Lib/
+Scripts/
+
+# Environment Variables
+.env
+
+# Browser / Selenium / Playwright
+browser_profile/
+*.log
+geckodriver.log
+chromedriver.log
+
+# Logs
+logs/
+
+# Local Data & Storage
+storage/*.csv
+storage/*.json
+storage/local_state.json
+storage/offline_data.json
+# Keep python files in storage
+!storage/*.py
+!storage/__init__.py
+
+# Debug dumps
+debug_*.html
+*.html
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
