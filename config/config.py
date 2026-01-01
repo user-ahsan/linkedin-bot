@@ -64,6 +64,7 @@ CONFIG = {
         "SCROLL_LOOPS": 2,           # Scrolls per search page
         "MAX_PROFILES_PER_SEARCH": 5,# Visit limit per keyword cycle
         "MAX_CONNECTIONS_PER_SEARCH": 3,
+        "LOCATION": "Saudia Arabia",      # Default location filter
     },
 
     "RUN_MODE": "ALL", # Options: "ALL", "FEED_ONLY", "SEARCH_ONLY"

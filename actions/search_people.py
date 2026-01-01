@@ -3,6 +3,7 @@ import re
 from core.logger import log_info, log_error, log_warn
 from core.human_actions import random_delay, human_scroll, safe_click, type_text
 from core.captcha_detector import CaptchaDetector
+from config.config import CONFIG
 
 def perform_search(page, keyword, captcha_detector: CaptchaDetector, scroll_loops):
     """
@@ -57,8 +58,9 @@ def perform_search(page, keyword, captcha_detector: CaptchaDetector, scroll_loop
             log_error("[ERROR] Location input field not found", module="SEARCH")
             return False
 
-        loc_input.fill("Pakistan")
-        log_info("[FILTER] Typed location: Pakistan", module="SEARCH")
+        location_keyword = CONFIG["SEARCH_SETTINGS"].get("LOCATION", "Pakistan")
+        loc_input.fill(location_keyword)
+        log_info(f"[FILTER] Typed location: {location_keyword}", module="SEARCH")
         time.sleep(3) # Wait for LinkedIn to fetch suggestions
 
         # STEP 5: SELECT FIRST LOCATION RESULT (CRITICAL)
@@ -120,9 +122,9 @@ def perform_search(page, keyword, captcha_detector: CaptchaDetector, scroll_loop
         body_text = page.locator("body").inner_text()
         
         # Validation 1: URL should contain geoUrn (Pakistan is often 101022442, but dynamic) OR origin switch
-        # Validation 2: "Pakistan" pill visible
-        
-        filter_pill = page.locator("button.artdeco-pill").filter(has_text="Pakistan")
+        # Validation 2: Configured Location pill visible
+        location_keyword = CONFIG["SEARCH_SETTINGS"].get("LOCATION", "Pakistan")
+        filter_pill = page.locator("button.artdeco-pill").filter(has_text=location_keyword)
         
         if "geoUrn" in current_url or filter_pill.count() > 0:
             log_info("[FILTER] Location filter applied successfully", module="SEARCH")

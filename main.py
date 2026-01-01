@@ -109,7 +109,8 @@ def main():
                     log_info(f"Processing Page {page_num} for keyword: {keyword}", module="MAIN")
                     
                     if page_num == 1:
-                        success = perform_search(page, keyword, captcha_detector)
+                        scroll_loops = CONFIG["SEARCH_SETTINGS"].get("SCROLL_LOOPS", 2)
+                        success = perform_search(page, keyword, captcha_detector, scroll_loops)
                         if not success:
                             break # Skip to next keyword if initial search fails
                     else:
