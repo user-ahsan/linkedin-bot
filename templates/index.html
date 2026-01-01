@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Bot Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #log-viewer {
+            background-color: #1e1e1e;
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 15px;
+            height: 400px;
+            overflow-y: scroll;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        .status-running { color: green; font-weight: bold; }
+        .status-stopped { color: red; font-weight: bold; }
+        .card { margin-bottom: 20px; }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container mt-4">
+    <h1 class="mb-4">LinkedIn Bot Control Panel</h1>
+    
+    <div class="row">
+        <!-- Controls Column -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Status & Control</div>
+                <div class="card-body text-center">
+                    <h5 id="status-indicator">Status: checking...</h5>
+                    <hr>
+                    <button class="btn btn-success w-100 mb-2" onclick="startBot()">START BOT</button>
+                    <button class="btn btn-danger w-100" onclick="stopBot()">STOP BOT</button>
+                </div>
+            </div>
+
+             <div class="card">
+                <div class="card-header">Quick Actions</div>
+                <div class="card-body">
+                    <button class="btn btn-primary w-100 mb-2" onclick="saveConfig()">Save Config</button>
+                    <button class="btn btn-secondary w-100" onclick="loadConfig()">Reload Config</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Logs Column -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">Live Logs (logs/bot.log)</div>
+                <div class="card-body">
+                    <div id="log-viewer">Waiting for logs...</div>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" value="" id="autoScroll" checked>
+                        <label class="form-check-label" for="autoScroll">
+                            Auto-scroll
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Section -->
+    <div class="card">
+        <div class="card-header">Configuration</div>
+        <div class="card-body">
+            <form id="config-form">
+                <div id="config-container">Loading configuration...</div>
+            </form>
+        </div>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let isRunning = false;
+    let configData = {};
+
+    function updateStatus() {
+        fetch('/api/status')
+            .then(response => response.json())
+            .then(data => {
+                const el = document.getElementById('status-indicator');
+                if (data.running) {
+                    el.innerHTML = 'Status: <span class="status-running">RUNNING (PID: ' + data.pid + ')</span>';
+                    isRunning = true;
+                } else {
+                    el.innerHTML = 'Status: <span class="status-stopped">STOPPED</span>';
+                    isRunning = false;
+                }
+            })
+            .catch(err => console.error('Status check failed:', err));
+    }
+
+    function startBot() {
+        fetch('/api/start', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message);
+                updateStatus();
+            });
+    }
+
+    function stopBot() {
+        fetch('/api/stop', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message);
+                updateStatus();
+            });
+    }
+
+    function refreshLogs() {
+        fetch('/api/logs')
+            .then(res => res.json())
+            .then(data => {
+                const logViewer = document.getElementById('log-viewer');
+                logViewer.innerText = data.logs.join('');
+                
+                if (document.getElementById('autoScroll').checked) {
+                    logViewer.scrollTop = logViewer.scrollHeight;
+                }
+            });
+    }
+
+    // Config Builder (Recursive for nested JSON)
+    function buildConfigForm(data, prefix = '') {
+        let html = '';
+        console.log("Building config for", prefix, data); // Debug
+        
+        for (const key in data) {
+            const val = data[key];
+            const fieldId = prefix ? prefix + '.' + key : key;
+            
+            if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+                html += `<fieldset class="border p-2 mb-2"><legend class="w-auto fs-6">${key}</legend>`;
+                html += buildConfigForm(val, fieldId);
+                html += `</fieldset>`;
+            } else {
+                html += `<div class="mb-2 row">`;
+                html += `<label class="col-sm-4 col-form-label text-truncate" title="${key}">${key}</label>`;
+                html += `<div class="col-sm-8">`;
+                
+                if (typeof val === 'boolean') {
+                    html += `<div class="form-check form-switch pt-2">
+                                <input class="form-check-input config-input" type="checkbox" id="${fieldId}" ${val ? 'checked' : ''} data-type="boolean">
+                             </div>`;
+                } else if (typeof val === 'number') {
+                    html += `<input type="number" class="form-control config-input" id="${fieldId}" value="${val}" data-type="number">`;
+                } else {
+                    html += `<input type="text" class="form-control config-input" id="${fieldId}" value="${val}" data-type="string">`;
+                }
+                
+                html += `</div></div>`;
+            }
+        }
+        return html;
+    }
+
+    function loadConfig() {
+        fetch('/api/config')
+            .then(res => res.json())
+            .then(data => {
+                configData = data; // Store raw data
+                const formHtml = buildConfigForm(data);
+                document.getElementById('config-container').innerHTML = formHtml;
+            });
+    }
+
+    function saveConfig() {
+        // Reconstruct JSON from form
+        const inputs = document.querySelectorAll('.config-input');
+        const newConfig = JSON.parse(JSON.stringify(configData)); // Deep copy helper
+        
+        inputs.forEach(input => {
+            const path = input.id.split('.');
+            let current = newConfig;
+            
+            for (let i = 0; i < path.length - 1; i++) {
+                current = current[path[i]];
+            }
+            
+            const lastKey = path[path.length - 1];
+            if (input.dataset.type === 'boolean') {
+                current[lastKey] = input.checked;
+            } else if (input.dataset.type === 'number') {
+                current[lastKey] = Number(input.value);
+            } else {
+                current[lastKey] = input.value !== "null" ? input.value : null;
+                // Handle "null" string if user wants true null? For now, string literal.
+                // Simple hack for nulls in JSON:
+                if (input.value === "" && configData[lastKey] === null) current[lastKey] = null;
+            }
+        });
+        
+        fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newConfig)
+        })
+        .then(res => res.json())
+        .then(data => alert(data.message));
+    }
+
+    // Init
+    updateStatus();
+    loadConfig();
+    setInterval(updateStatus, 5000);
+    setInterval(refreshLogs, 1000);
+
+</script>
+</body>
+</html>

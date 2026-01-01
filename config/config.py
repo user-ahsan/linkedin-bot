@@ -1,89 +1,60 @@
 import os
+import json
+import shutil
 from dotenv import load_dotenv
 
 # Load environment variables from .env file if it exists
 load_dotenv()
 
-CONFIG = {
-    "ENABLE_AUTOMATION": True,
-    "ENABLE_EMAIL_ALERTS": True,
-    "EMAIL_ON_CAPTCHA": True,
-    
-    "BROWSER": {
-        "HEADLESS": False, # Explicitly set to False for headful mode as requested
-        "USER_DATA_DIR": "./browser_profile",
-    },
-    
-    "SCHEDULER": {
-        "START_HOUR": None,   # Set to None for 24/7 mode
-        "END_HOUR": 18,
-        "TIMEZONE": "Asia/Karachi"
-    },
-    
-    "LIMITS": {
-        "LIKES_PER_DAY": 10000,
-        "PROFILE_VISITS_PER_DAY": 10000,
-        "CONNECTIONS_PER_DAY": 10000
-    },
-    
-    "DELAYS": {
-        "ACTION_MIN": 2.5,
-        "ACTION_MAX": 6.5,
-        "SHORT_BREAK_MIN": 5,    # Seconds
-        "SHORT_BREAK_MAX": 10,
-        "LONG_BREAK_MIN": 10,    # Seconds
-        "LONG_BREAK_MAX": 15
-    },
-    
-    "EMAIL": {
-        "TO": os.getenv("EMAIL_TO", "your@email.com"),
-        "SMTP_SERVER": os.getenv("SMTP_SERVER", "smtp.gmail.com"),
-        "PORT": int(os.getenv("SMTP_PORT", 587)),
-        "FROM": os.getenv("EMAIL_FROM", "notifier@bot.com"),
-        "PASSWORD": os.getenv("EMAIL_PASSWORD", "")
-    },
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
+DEFAULT_CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.default.json') # Optional backup
 
-    "LLM": {
-        "API_KEY": os.getenv("OPENAI_API_KEY", ""), # Leave empty to disable smart notes
-        "MODEL": "gpt-3.5-turbo",
-        "ENABLE_SMART_NOTES": True # Set to False to force skip note generation
-    },
+def load_config():
+    """Lengths configuration from config.json"""
+    if not os.path.exists(CONFIG_FILE):
+        # Create default if not exists
+        return {}
     
-    "LINKEDIN": {
-        "EMAIL": os.getenv("LINKEDIN_EMAIL", ""),
-        "PASSWORD": os.getenv("LINKEDIN_PASSWORD", ""),
-        "RETRY_LOGIN": True
-    },
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading config.json: {e}")
+        return {}
 
-    "GSPREAD": {
-        "CREDENTIALS_FILE": "credentials.json",
-        "SHEET_NAME": "LinkedinBotData"
-    },
-    
-    "SEARCH_SETTINGS": {
-        "SCROLL_LOOPS": 2,           # Scrolls per search page
-        "MAX_PROFILES_PER_SEARCH": 5,# Visit limit per keyword cycle
-        "MAX_CONNECTIONS_PER_SEARCH": 3,
-        "LOCATION": "Saudi Arabia",      # Default location filter
-    },
+def save_config(new_config):
+    """Saves configuration to config.json"""
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(new_config, f, indent=4)
+        return True
+    except Exception as e:
+        print(f"Error saving config.json: {e}")
+        return False
 
-    "RUN_MODE": "ALL", # Options: "ALL", "FEED_ONLY", "SEARCH_ONLY"
+# Load Initial Config
+CONFIG = load_config()
 
-    "EXTRACTION": {
-        "MAX_SCROLLS": 2,            # Limit scroll depth on profile
-        "SAFE_MODE": True,           # If True, minimizes clicks (no "show more" expansion)
-        "MIN_WAIT": 3,               # Min reading time per section
-        "WAIT_TIMEOUT": 15000,       # Timeout for page loads/selectors
-    }
-}
+# Inject Environment Variables into Config where necessary (Overwrites)
+# This maintains backward compatibility if specific ENV vars are used
+if os.getenv("EMAIL_PASSWORD"):
+    CONFIG["EMAIL"]["PASSWORD"] = os.getenv("EMAIL_PASSWORD")
+if os.getenv("OPENAI_API_KEY"):
+    CONFIG["LLM"]["API_KEY"] = os.getenv("OPENAI_API_KEY")
+if os.getenv("LINKEDIN_EMAIL"):
+    CONFIG["LINKEDIN"]["EMAIL"] = os.getenv("LINKEDIN_EMAIL")
+if os.getenv("LINKEDIN_PASSWORD"):
+    CONFIG["LINKEDIN"]["PASSWORD"] = os.getenv("LINKEDIN_PASSWORD")
+
 
 def validate_config():
     """Validates the configuration for critical errors."""
     errors = []
     
     # Validate Scheduler
-    if CONFIG["SCHEDULER"]["START_HOUR"] >= CONFIG["SCHEDULER"]["END_HOUR"]:
-        errors.append("Scheduler: START_HOUR must be less than END_HOUR")
+    if CONFIG["SCHEDULER"]["START_HOUR"] is not None and CONFIG["SCHEDULER"]["END_HOUR"] is not None:
+        if CONFIG["SCHEDULER"]["START_HOUR"] >= CONFIG["SCHEDULER"]["END_HOUR"]:
+            errors.append("Scheduler: START_HOUR must be less than END_HOUR")
         
     # Validate Limits
     if CONFIG["LIMITS"]["LIKES_PER_DAY"] < 0:

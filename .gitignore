@@ -35,7 +35,7 @@ storage/offline_data.json
 
 # Debug dumps
 debug_*.html
-*.html
+!templates/*.html
 
 # IDE settings
 .vscode/

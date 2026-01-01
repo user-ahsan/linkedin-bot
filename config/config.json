@@ -1,0 +1,61 @@
+{
+    "ENABLE_AUTOMATION": true,
+    "ENABLE_EMAIL_ALERTS": true,
+    "EMAIL_ON_CAPTCHA": true,
+    "BROWSER": {
+        "HEADLESS": false,
+        "USER_DATA_DIR": "./browser_profile"
+    },
+    "SCHEDULER": {
+        "START_HOUR": null,
+        "END_HOUR": 18,
+        "TIMEZONE": "Asia/Karachi"
+    },
+    "LIMITS": {
+        "LIKES_PER_DAY": 10000,
+        "PROFILE_VISITS_PER_DAY": 10000,
+        "CONNECTIONS_PER_DAY": 10000
+    },
+    "DELAYS": {
+        "ACTION_MIN": 2.5,
+        "ACTION_MAX": 6.5,
+        "SHORT_BREAK_MIN": 5,
+        "SHORT_BREAK_MAX": 10,
+        "LONG_BREAK_MIN": 10,
+        "LONG_BREAK_MAX": 15
+    },
+    "EMAIL": {
+        "TO": "your@email.com",
+        "SMTP_SERVER": "smtp.gmail.com",
+        "PORT": 587,
+        "FROM": "notifier@bot.com",
+        "PASSWORD": ""
+    },
+    "LLM": {
+        "API_KEY": "",
+        "MODEL": "gpt-3.5-turbo",
+        "ENABLE_SMART_NOTES": true
+    },
+    "LINKEDIN": {
+        "EMAIL": "",
+        "PASSWORD": "",
+        "RETRY_LOGIN": true
+    },
+    "GSPREAD": {
+        "CREDENTIALS_FILE": "credentials.json",
+        "SHEET_NAME": "LinkedinBotData"
+    },
+    "SEARCH_SETTINGS": {
+        "SCROLL_LOOPS": 2,
+        "MAX_PROFILES_PER_SEARCH": 5,
+        "MAX_CONNECTIONS_PER_SEARCH": 3,
+        "LOCATION": "Saudi Arabia"
+    },
+    "RUN_MODE": "ALL",
+    "EXTRACTION": {
+        "MAX_SCROLLS": 2,
+        "SAFE_MODE": true,
+        "MIN_WAIT": 3,
+        "WAIT_TIMEOUT": 15000
+    }
+}

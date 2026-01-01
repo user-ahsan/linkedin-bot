@@ -6,3 +6,4 @@ gspread
 openai
 python-dotenv
 oauth2client
+flask
