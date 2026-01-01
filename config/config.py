@@ -58,6 +58,20 @@ CONFIG = {
     "GSPREAD": {
         "CREDENTIALS_FILE": "credentials.json",
         "SHEET_NAME": "LinkedinBotData"
+    },
+    
+    "SEARCH_SETTINGS": {
+        "SCROLL_LOOPS": 2,           # Scrolls per search page
+        "MAX_PROFILES_PER_SEARCH": 5,# Visit limit per keyword cycle
+        "MAX_CONNECTIONS_PER_SEARCH": 3,
+    },
+
+    "RUN_MODE": "ALL", # Options: "ALL", "FEED_ONLY", "SEARCH_ONLY"
+
+    "EXTRACTION": {
+        "MAX_SCROLLS": 2,            # Limit scroll depth on profile
+        "SAFE_MODE": True,           # If True, minimizes clicks (no "show more" expansion)
+        "MIN_WAIT": 3,               # Min reading time per section
     }
 }
 

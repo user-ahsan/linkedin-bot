@@ -82,10 +82,19 @@ class SheetsClient:
                     writer = csv.writer(f)
                     writer.writerow(["Timestamp", "Action", "Target", "Status", "SessionID"])
             
+            # New Comprehensive Schema for Profile Requests
             if not os.path.exists(self.csv_profiles):
                 with open(self.csv_profiles, 'w', newline='', encoding='utf-8') as f:
                     writer = csv.writer(f)
-                    writer.writerow(["Name", "Headline", "Skills", "URL", "Note", "Time", "Status"])
+                    writer.writerow([
+                        "profile_url", "linkedin_id", "full_name", "first_name", "connection_degree", "location", # Identity
+                        "headline", "current_role", "current_company", "industry_keywords", "persona_type", # Context
+                        "about_text", "about_keywords", "years_of_experience", "seniority_level", # About
+                        "latest_job_title", "latest_company", "latest_job_duration", "previous_company", # Experience
+                        "top_skills", "skill_types", # Skills
+                        "recent_post_snippet", "recent_post_topic", "followers_count", "connections_count", # Activity
+                        "extracted_at", "profile_status", "message_sent", "reply_received", "last_action", "notes" # Automation
+                    ])
         except Exception as e:
             log_error(f"Failed to init CSVs: {e}", module="GUS")
 
@@ -110,10 +119,11 @@ class SheetsClient:
                 reader = csv.reader(f)
                 next(reader, None) # Skip header
                 for row in reader:
-                    if len(row) > 3:
-                        csv_url = row[3].split('?')[0].rstrip('/')
-                        if csv_url == target_url:
-                            return True
+                    # Check both col 0 (new) and col 3 (old) to be safe
+                    if len(row) > 0 and row[0].split('?')[0].rstrip('/') == target_url:
+                        return True
+                    if len(row) > 3 and row[3].split('?')[0].rstrip('/') == target_url:
+                        return True
         except Exception as e:
             log_error(f"CSV Read Error: {e}", module="GUS")
         return False
@@ -150,49 +160,7 @@ class SheetsClient:
             return
 
         log_info("Syncing offline data to Sheets...", module="GUS")
-        
-        try:
-            with open(self.offline_file, 'r') as f:
-                data_list = json.load(f)
-            
-            remaining_data = []
-            
-            for item in data_list:
-                success = False
-                if item["type"] == "interaction":
-                    success = self.append_interaction(item["data"], force_online=True)
-                elif item["type"] == "profile_request":
-                    # Reconstruct args logic
-                    # Stored data is row list? 
-                    # Wait, append_profile_request takes (profile_data, note, status)
-                    # We should store args, or just store the formatted row.
-                    # Current implementation below calls append_row directly.
-                    # Optimally, _save_offline should store the raw arguments or the final row.
-                    # Let's see how I implemented append_profile_request below.
-                    # It constructs the row. 
-                    # Let's enable passing 'row' directly or kwargs.
-                    pass 
-                    
-                # NOTE: To simplify sync, I will modify append_* methods to just return Success status
-                # And if they fail (when forcing online), we keep it.
-                
-                # Actually, simpler: 
-                # Just fail fast. If connected, we are good.
-                pass
-                
-            # For this iteration, let's keep it simple. 
-            # If we are connected, we just wipe the file after processing? 
-            # Or correct implementation:
-            
-            # Since I can't easily refactor the specialized arguments without changing the offline structure:
-            # I will just clear the file if I'm connected for now to avoid complexity, 
-            # OR better: I will implement specific sync logic if I have time. 
-            # For now, let's just support saving.
-            
-            pass 
-            
-        except Exception as e:
-            log_error(f"Sync failed: {e}", module="GUS")
+        pass # Simplified sync logic to avoid schema mix issues during transition
 
     def append_interaction(self, row_data, force_online=False):
         # row_data: [timestamp, action, target, status, session_id]
@@ -213,17 +181,26 @@ class SheetsClient:
             return True
 
     def append_profile_request(self, profile_data, note, status="SENT"):
-        # Construct the row here
+        # Map flat dictionary to new Schema List
         import datetime
+        now_str = str(datetime.datetime.now())
+        
+        # Safe get helper
+        def g(key): return str(profile_data.get(key, "")).strip()
+        
+        # 31 Columns
         row = [
-            profile_data.get("name"),
-            profile_data.get("headline"),
-            ", ".join(profile_data.get("skills", [])[:5]),
-            profile_data.get("url"),
-            note,
-            str(datetime.datetime.now()),
-            status
+            g("profile_url"), g("linkedin_id"), g("full_name"), g("first_name"), g("connection_degree"), g("location"), # Identity
+            g("headline"), g("current_role"), g("current_company"), g("industry_keywords"), g("persona_type"), # Context
+            g("about_text"), g("about_keywords"), g("years_of_experience"), g("seniority_level"), # About
+            g("latest_job_title"), g("latest_company"), g("latest_job_duration"), g("previous_company"), # Experience
+            g("top_skills"), g("skill_types"), # Skills
+            g("recent_post_snippet"), g("recent_post_topic"), g("followers_count"), g("connections_count"), # Activity
+            now_str, status, "True" if status == "SENT" else "False", "False", "connect", g("notes") # Automation
         ]
+        
+        # Override the last 'notes' with the connection message sent if applicable
+        if note: row[-1] = note
             
         # Mirror to CSV always
         self._write_to_csv(self.csv_profiles, row)

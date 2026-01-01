@@ -4,13 +4,13 @@ from core.logger import log_info, log_error, log_warn
 from core.human_actions import random_delay, human_scroll, safe_click, type_text
 from core.captcha_detector import CaptchaDetector
 
-def perform_search(page, keyword, captcha_detector: CaptchaDetector):
+def perform_search(page, keyword, captcha_detector: CaptchaDetector, scroll_loops):
     """
     Executes search for a keyword and filters by People and Location (Pakistan).
     Strictly follows Corrective Guidance Document.
     """
     try:
-        log_info(f"Searching for: {keyword}", module="SEARCH")
+        log_info(f"Searching for: {keyword} (Loops: {scroll_loops})", module="SEARCH")
         captcha_detector.check_for_captcha(page)
         
         # STEP 1: Search Query
@@ -134,8 +134,11 @@ def perform_search(page, keyword, captcha_detector: CaptchaDetector):
             return False
 
         # STEP 8: Scroll Results
-        log_info("scrolling results...", module="SEARCH")
-        human_scroll(page)
+        log_info(f"scrolling results ({scroll_loops} loops)...", module="SEARCH")
+        for i in range(scroll_loops):
+            human_scroll(page)
+            # More natural delay between scroll actions
+            random_delay("SHORT_BREAK")
         
         # STEP 9 Success
         return True
