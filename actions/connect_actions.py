@@ -125,21 +125,49 @@ def send_connection_request(page, note, rate_limiter: RateLimiter):
 def _find_connect_button(container):
     """
     Finds the Connect button using accessibility > text fallback chain.
+    Prioritizes the 'Blue' Primary button as requested by user.
     """
-    # 1. Role + Name (Best)
+    # 0. Blue Button Strategy (Primary Action)
+    # The blue button usually differs by 'artdeco-button--primary' class.
+    # We check if this specific button exists and says "Connect"
+    try:
+        primary_btn = container.locator("button.artdeco-button--primary, a.artdeco-button--primary").first
+        if primary_btn.is_visible():
+            txt = primary_btn.inner_text().strip()
+            
+            # Check if it is "Connect"
+            if "Connect" in txt and "Connected" not in txt and "Message" not in txt:
+                log_info(f"Primary Blue Button found ({txt}). Clicking...", module="CONNECT")
+                return primary_btn
+            else:
+                pass # Continue to standard checks
+    except Exception as e:
+        log_warn(f"debug: Error checking blue button: {e}", module="CONNECT")
+
+    # 1. Role + Name (Accessibility Standard)
     # Note: 'Connect' is the ideal name. Sometimes 'Connect with [Name]'
     btn = container.get_by_role("button", name=re.compile(r"^Connect", re.IGNORECASE)).first
     if btn.is_visible() and "Connect" in btn.inner_text(): 
         return btn
+    
+    # 1b. Role Link (LinkedIn usage)
+    link_btn = container.get_by_role("link", name=re.compile(r"^Connect", re.IGNORECASE)).first
+    if link_btn.is_visible():
+        return link_btn
 
     # 2. Aria Label
-    btn = container.locator("button[aria-label^='Connect']").first
+    btn = container.locator("button[aria-label^='Connect'], a[aria-label^='Connect']").first
     if btn.is_visible(): return btn
 
-    # 3. Text content (Fallback)
+    # 3. Text content (Last Resort Fallback)
     # Exclude "Connected", "Disconnect"
-    btn = container.locator("button").filter(has_text=re.compile(r"^Connect(?!ed|ing)", re.IGNORECASE)).first
-    if btn.is_visible(): return btn
+    # Filter for button OR link
+    btn = container.locator("button, a").filter(has_text=re.compile(r"^Connect(?!ed|ing)", re.IGNORECASE)).first
+    if btn.is_visible():
+        # Verify text again to be safe
+        t = btn.inner_text()
+        if "Connect" in t and "Connected" not in t:
+            return btn
     
     return None
 
