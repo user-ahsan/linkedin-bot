@@ -125,49 +125,49 @@ def send_connection_request(page, note, rate_limiter: RateLimiter):
 def _find_connect_button(container):
     """
     Finds the Connect button using accessibility > text fallback chain.
-    Prioritizes the 'Blue' Primary button as requested by user.
+    Updated to iterate through all candidates to skip hidden elements.
     """
     # 0. Blue Button Strategy (Primary Action)
-    # The blue button usually differs by 'artdeco-button--primary' class.
-    # We check if this specific button exists and says "Connect"
     try:
-        primary_btn = container.locator("button.artdeco-button--primary, a.artdeco-button--primary").first
-        if primary_btn.is_visible():
-            txt = primary_btn.inner_text().strip()
-            
-            # Check if it is "Connect"
-            if "Connect" in txt and "Connected" not in txt and "Message" not in txt:
-                log_info(f"Primary Blue Button found ({txt}). Clicking...", module="CONNECT")
-                return primary_btn
-            else:
-                pass # Continue to standard checks
+        primary_btns = container.locator("button.artdeco-button--primary, a.artdeco-button--primary").all()
+        for btn in primary_btns:
+            if btn.is_visible():
+                txt = btn.inner_text().strip()
+                # Check if it is "Connect" and not "Message"
+                if "Connect" in txt and "Connected" not in txt and "Message" not in txt:
+                    log_info(f"Primary Blue Button found ({txt}). Clicking...", module="CONNECT")
+                    return btn
     except Exception as e:
-        log_warn(f"debug: Error checking blue button: {e}", module="CONNECT")
+        log_info(f"Debug: Error checking blue button: {e}", module="CONNECT")
 
-    # 1. Role + Name (Accessibility Standard)
-    # Note: 'Connect' is the ideal name. Sometimes 'Connect with [Name]'
-    btn = container.get_by_role("button", name=re.compile(r"^Connect", re.IGNORECASE)).first
-    if btn.is_visible() and "Connect" in btn.inner_text(): 
-        return btn
+    # 1. Role + Name
+    try:
+        for btn in container.get_by_role("button", name=re.compile(r"^Connect", re.IGNORECASE)).all():
+            if btn.is_visible() and "Connect" in btn.inner_text():
+                return btn
+    except: pass
     
-    # 1b. Role Link (LinkedIn usage)
-    link_btn = container.get_by_role("link", name=re.compile(r"^Connect", re.IGNORECASE)).first
-    if link_btn.is_visible():
-        return link_btn
+    # 1b. Role Link 
+    try:
+        for btn in container.get_by_role("link", name=re.compile(r"^Connect", re.IGNORECASE)).all():
+            if btn.is_visible(): return btn
+    except: pass
 
     # 2. Aria Label
-    btn = container.locator("button[aria-label^='Connect'], a[aria-label^='Connect']").first
-    if btn.is_visible(): return btn
+    try:
+        for btn in container.locator("button[aria-label^='Connect'], a[aria-label^='Connect']").all():
+            if btn.is_visible(): return btn
+    except: pass
 
-    # 3. Text content (Last Resort Fallback)
-    # Exclude "Connected", "Disconnect"
-    # Filter for button OR link
-    btn = container.locator("button, a").filter(has_text=re.compile(r"^Connect(?!ed|ing)", re.IGNORECASE)).first
-    if btn.is_visible():
-        # Verify text again to be safe
-        t = btn.inner_text()
-        if "Connect" in t and "Connected" not in t:
-            return btn
+    # 3. Text content (Last Resort)
+    try:
+        candidates = container.locator("button, a").filter(has_text=re.compile(r"^Connect(?!ed|ing)", re.IGNORECASE)).all()
+        for btn in candidates:
+            if btn.is_visible():
+                t = btn.inner_text()
+                if "Connect" in t and "Connected" not in t:
+                    return btn
+    except: pass
     
     return None
 

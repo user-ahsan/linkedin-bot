@@ -199,36 +199,38 @@ def main():
                             if sheets_client.is_profile_processed(url):
                                 continue
 
-                            # 2. Check for "Connect" Button (Accessible + Fallback)
+                            # 2. Check for "Connect" Button (Robust Strategy)
                             has_connect = False
                             
+                            # Strategy Zero: View Name Identifier (Specific to this UI)
+                            # Detected from debug logs: data-view-name="edge-creation-connect-action"
+                            if res.locator("div[data-view-name='edge-creation-connect-action']").count() > 0:
+                                has_connect = True
+                                
                             # Strategy A: Role "button" (Standard accessibility)
-                            if res.get_by_role("button", name=re.compile(r"^Connect", re.IGNORECASE)).count() > 0:
+                            # Regex updated to catch "Invite [Name] to connect"
+                            elif res.get_by_role("button", name=re.compile(r"(^Connect|Invite .+ to connect)", re.IGNORECASE)).count() > 0:
                                 has_connect = True
                                 
                             # Strategy B: Role "link" (LinkedIn often uses <a> for actions)
-                            elif res.get_by_role("link", name=re.compile(r"^Connect", re.IGNORECASE)).count() > 0:
+                            elif res.get_by_role("link", name=re.compile(r"(^Connect|Invite .+ to connect)", re.IGNORECASE)).count() > 0:
                                 has_connect = True
                                 
-                            # Strategy C: Explicit Element Attributes (Aria-Label) on button OR link
-                            if not has_connect:
-                                if res.locator("button[aria-label^='Connect'], a[aria-label^='Connect']").count() > 0:
-                                    has_connect = True
+                            # Strategy C: Aria-Label on button OR link
+                            # Matches "Connect" or "Invite ... to connect" 
+                            elif res.locator("button[aria-label*='to connect'], a[aria-label*='to connect'], button[aria-label^='Connect'], a[aria-label^='Connect']").count() > 0:
+                                has_connect = True
 
-                            # Strategy D: Text Content (Fallback for stubborn elements)
+                            # Strategy D: Text Content (Last Resort)
                             if not has_connect:
-                                # Look for "Connect" text but strictly avoid "Connected", "Disconnect"
-                                # We check both button and a tags.
                                 candidates_btn = res.locator("button, a").filter(has_text=re.compile(r"Connect", re.IGNORECASE)).all()
                                 for b in candidates_btn:
                                     if b.is_visible():
                                         t = b.inner_text().strip()
-                                        # Strict check: "Connect" must be distinct
-                                        # e.g. "Connect", "Connect with John", but NOT "Connected"
                                         if "Connect" in t and "Connected" not in t and "Pending" not in t and "Message" not in t:
                                             has_connect = True
                                             break
-
+                            
                             if has_connect:
                                 candidates.append(url)
 

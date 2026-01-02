@@ -48,18 +48,26 @@ def start_bot():
     if BOT_PROCESS is not None and BOT_PROCESS.poll() is None:
         return jsonify({"status": "error", "message": "Bot is already running"}), 400
     
-    # Run main.py using the same python executable
+        # Run main.py using the same python executable
     try:
-        # Use python from the current environment
-        python_exe = sys.executable 
+        # Check for local virtual environment first to avoid systemic path issues
+        current_dir = os.getcwd()
+        venv_python = os.path.join(current_dir, ".venv", "Scripts", "python.exe")
+        
+        if os.path.exists(venv_python):
+            print(f"[INFO] Detected local venv. Using: {venv_python}")
+            python_exe = venv_python
+        else:
+            # Fallback to whatever is running this script
+            python_exe = sys.executable 
+            
         cmd = [python_exe, "main.py"]
         
-        # Open in new console? No, we want to capture output or let it log to file.
-        # Since main.py logs to file, we can just spawn it.
-        # We redirect stdout/stderr to devnull or let it inherit to the web app console?
-        # Ideally, main.py writes to logs/bot.log.
+        print(f"[DEBUG] Spawning process with: {python_exe}")
+        print(f"[DEBUG] Command: {cmd}")
+        print(f"[DEBUG] CWD: {current_dir}")
         
-        BOT_PROCESS = subprocess.Popen(cmd, cwd=os.getcwd())
+        BOT_PROCESS = subprocess.Popen(cmd, cwd=current_dir)
         return jsonify({"status": "success", "message": "Bot started", "pid": BOT_PROCESS.pid})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
