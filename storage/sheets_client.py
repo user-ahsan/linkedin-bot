@@ -28,6 +28,11 @@ class SheetsClient:
             self.sync_offline_data()
 
     def _connect(self):
+        if not CONFIG["GSPREAD"].get("ENABLED", True):
+            log_info("Google Sheets disabled in config. Running in OFFLINE mode.", module="GUS")
+            self.connected = False
+            return
+
         try:
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             creds_file = CONFIG["GSPREAD"]["CREDENTIALS_FILE"]

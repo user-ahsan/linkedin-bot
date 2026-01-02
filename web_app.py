@@ -11,6 +11,11 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from config.config import CONFIG_FILE, load_config, save_config
 
+import logging
+# Disable Werkzeug access logs
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
 app = Flask(__name__)
 
 # Global variable to hold the bot process
@@ -97,4 +102,18 @@ def update_config():
         return jsonify({"status": "error", "message": "Failed to save config"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # Completely disable Werkzeug logging to keep terminal clean
+    import logging
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)
+    log.disabled = True
+    app.logger.disabled = True
+    
+    # Run without debug mode if possible to minimize noise, or keep it but with logs silenced
+    print("\n" + "="*60)
+    print(" 🤖 LINKEDIN BOT WEB INTERFACE IS READY")
+    print(" 👉 Open Dashboard: http://localhost:5000")
+    print("    (Hold Ctrl + Click the link above to open)")
+    print("="*60 + "\n")
+    print("Press Ctrl+C to stop the server.")
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)

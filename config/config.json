@@ -1,61 +1,62 @@
 {
-    "ENABLE_AUTOMATION": true,
-    "ENABLE_EMAIL_ALERTS": true,
-    "EMAIL_ON_CAPTCHA": true,
     "BROWSER": {
         "HEADLESS": false,
         "USER_DATA_DIR": "./browser_profile"
     },
-    "SCHEDULER": {
-        "START_HOUR": null,
-        "END_HOUR": 18,
-        "TIMEZONE": "Asia/Karachi"
-    },
-    "LIMITS": {
-        "LIKES_PER_DAY": 10000,
-        "PROFILE_VISITS_PER_DAY": 10000,
-        "CONNECTIONS_PER_DAY": 10000
-    },
     "DELAYS": {
-        "ACTION_MIN": 2.5,
         "ACTION_MAX": 6.5,
-        "SHORT_BREAK_MIN": 5,
-        "SHORT_BREAK_MAX": 10,
+        "ACTION_MIN": 2.5,
+        "LONG_BREAK_MAX": 15,
         "LONG_BREAK_MIN": 10,
-        "LONG_BREAK_MAX": 15
+        "SHORT_BREAK_MAX": 10,
+        "SHORT_BREAK_MIN": 5
     },
     "EMAIL": {
-        "TO": "your@email.com",
-        "SMTP_SERVER": "smtp.gmail.com",
-        "PORT": 587,
         "FROM": "notifier@bot.com",
-        "PASSWORD": ""
+        "PASSWORD": "",
+        "PORT": 587,
+        "SMTP_SERVER": "smtp.gmail.com",
+        "TO": "your@email.com"
     },
-    "LLM": {
-        "API_KEY": "",
-        "MODEL": "gpt-3.5-turbo",
-        "ENABLE_SMART_NOTES": true
+    "EMAIL_ON_CAPTCHA": false,
+    "ENABLE_AUTOMATION": true,
+    "ENABLE_EMAIL_ALERTS": false,
+    "EXTRACTION": {
+        "MAX_SCROLLS": 2,
+        "MIN_WAIT": 3,
+        "SAFE_MODE": true,
+        "WAIT_TIMEOUT": 15000
+    },
+    "GSPREAD": {
+        "ENABLED": true,
+        "CREDENTIALS_FILE": "credentials.json",
+        "SHEET_NAME": "LinkedinBotData"
+    },
+    "LIMITS": {
+        "CONNECTIONS_PER_DAY": 10000,
+        "LIKES_PER_DAY": 10000,
+        "PROFILE_VISITS_PER_DAY": 10000
     },
     "LINKEDIN": {
         "EMAIL": "",
         "PASSWORD": "",
         "RETRY_LOGIN": true
     },
-    "GSPREAD": {
-        "CREDENTIALS_FILE": "credentials.json",
-        "SHEET_NAME": "LinkedinBotData"
-    },
-    "SEARCH_SETTINGS": {
-        "SCROLL_LOOPS": 2,
-        "MAX_PROFILES_PER_SEARCH": 5,
-        "MAX_CONNECTIONS_PER_SEARCH": 3,
-        "LOCATION": "Saudi Arabia"
+    "LLM": {
+        "API_KEY": "",
+        "ENABLE_SMART_NOTES": false,
+        "MODEL": "gpt-3.5-turbo"
     },
     "RUN_MODE": "ALL",
-    "EXTRACTION": {
-        "MAX_SCROLLS": 2,
-        "SAFE_MODE": true,
-        "MIN_WAIT": 3,
-        "WAIT_TIMEOUT": 15000
+    "SCHEDULER": {
+        "END_HOUR": 18,
+        "START_HOUR": null,
+        "TIMEZONE": "Asia/Karachi"
+    },
+    "SEARCH_SETTINGS": {
+        "LOCATION": "Saudi Arabia",
+        "MAX_CONNECTIONS_PER_SEARCH": 3,
+        "MAX_PROFILES_PER_SEARCH": 5,
+        "SCROLL_LOOPS": 2
     }
 }

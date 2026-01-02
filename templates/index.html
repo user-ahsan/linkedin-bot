@@ -1,32 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LinkedIn Bot Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+
         #log-viewer {
-            background-color: #1e1e1e;
-            color: #00ff00;
-            font-family: 'Courier New', Courier, monospace;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: 'Consolas', 'Monaco', monospace;
             padding: 15px;
             height: 500px;
             overflow-y: scroll;
             border-radius: 8px;
             white-space: pre-wrap;
-            font-size: 0.9em;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            font-size: 0.85rem;
+            line-height: 1.4;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+            border: 1px solid #30363d;
         }
-        .status-running { color: #198754; font-weight: bold; } /* Bootstrap Success Green */
-        .status-stopped { color: #dc3545; font-weight: bold; } /* Bootstrap Danger Red */
-        .card { 
-            border: none; 
-            border-radius: 10px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+
+        /* Log Coloring */
+        .log-timestamp {
+            color: #8b949e;
+            margin-right: 8px;
+        }
+
+        .log-level-info {
+            color: #7ee787;
+            font-weight: bold;
+        }
+
+        .log-level-warn {
+            color: #d29922;
+            font-weight: bold;
+        }
+
+        .log-level-error {
+            color: #f85149;
+            font-weight: bold;
+        }
+
+        .log-module {
+            color: #79c0ff;
+            font-weight: 600;
+            margin: 0 5px;
+        }
+
+        .log-message {
+            color: #c9d1d9;
+        }
+
+        .log-human {
+            color: #a5d6ff;
+            background: rgba(56, 139, 253, 0.15);
+            padding: 0 4px;
+            border-radius: 4px;
+        }
+
+        .log-core {
+            color: #d2a8ff;
+        }
+
+        .status-running {
+            color: #198754;
+            font-weight: bold;
+        }
+
+        .status-stopped {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
             margin-bottom: 20px;
         }
+
         .card-header {
             background-color: #fff;
             border-bottom: 1px solid #eee;
@@ -34,375 +93,410 @@
             border-radius: 10px 10px 0 0 !important;
             padding: 15px 20px;
         }
-        .btn-control { padding: 10px; font-weight: 600; letter-spacing: 0.5px; }
-        
-        /* Config Styling */
-        .config-fieldset { margin-bottom: 15px; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; background: #fff; }
-        .config-legend { float: none; width: auto; padding: 0 10px; margin: 0; font-size: 1rem; font-weight: 600; color: #495057; }
-        .form-label { font-size: 0.9rem; color: #6c757d; font-weight: 500; }
-        .form-control:focus, .form-check-input:focus { box-shadow: 0 0 0 0.25rem rgba(13,110,253,0.15); border-color: #86b7fe; }
+
+        .btn-control {
+            padding: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .config-fieldset {
+            margin-bottom: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            background: #fff;
+        }
+
+        .config-legend {
+            float: none;
+            width: auto;
+            padding: 0 10px;
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .form-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .section-body {
+            transition: opacity 0.3s ease;
+        }
+
+        .dimmed {
+            opacity: 0.5;
+            pointer-events: none;
+        }
     </style>
 </head>
+
 <body class="pb-5">
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#">🤖 Antigravity Agent</a>
+            <div class="d-flex text-light small">
+                <span class="me-3">v1.3</span>
+            </div>
+        </div>
+    </nav>
+
     <div class="container">
-        <a class="navbar-brand" href="#">🤖 Antigravity Agent</a>
-    </div>
-</nav>
-
-<div class="container">
-    
-    <div class="row g-4">
-        <!-- Controls Column -->
-        <div class="col-lg-4 order-lg-last">
-            <div class="card bg-white">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>System Status</span>
-                    <span id="status-badge" class="badge bg-secondary">Unknown</span>
-                </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-success btn-control" onclick="startBot()">
-                             START AGENT
-                        </button>
-                        <button class="btn btn-danger btn-control" onclick="stopBot()">
-                             STOP AGENT
-                        </button>
+        <div class="row g-4">
+            <!-- Controls Side -->
+            <div class="col-lg-4 order-lg-last">
+                <div class="card bg-white">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>System Status</span>
+                        <span id="status-badge" class="badge bg-secondary">Unknown</span>
                     </div>
-                    <div class="mt-3 text-center small text-muted">
-                        PID: <span id="pid-display">--</span>
-                    </div>
-                </div>
-            </div>
-
-             <div class="card bg-white">
-                <div class="card-header">Configuration Actions</div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-primary" onclick="saveConfig()">Save & Apply Changes</button>
-                        <button class="btn btn-outline-secondary" onclick="loadConfig()">Discard & Reload</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Logs Column -->
-        <div class="col-lg-8 order-lg-first">
-             <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>Config Editor</span>
-                </div>
-                <!-- Configuration Section -->
-                <div class="card-body">
-                     <form id="config-form">
-                        <div id="config-container">
-                            <div class="text-center p-4">
-                                <div class="spinner-border text-primary" role="status"></div>
-                                <p class="mt-2 text-muted">Loading configuration...</p>
-                            </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success btn-control" onclick="startBot()">START AGENT</button>
+                            <button class="btn btn-danger btn-control" onclick="stopBot()">STOP AGENT</button>
                         </div>
-                    </form>
+                    </div>
                 </div>
-            </div>
 
-            <div class="card">
-                <div class="card-header">Live Terminal Output</div>
-                <div class="card-body p-0">
-                    <div id="log-viewer">Connecting to log stream...</div>
-                </div>
-                <div class="card-footer bg-white border-0">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="autoScroll" checked>
-                        <label class="form-check-label small" for="autoScroll">Auto-scroll logs</label>
+                <div class="card bg-white">
+                    <div class="card-header">Configuration Actions</div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" onclick="saveConfig()">Save & Apply Changes</button>
+                            <button class="btn btn-outline-secondary" onclick="loadConfig()">Discard & Reload</button>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Main Content Side -->
+            <div class="col-lg-8 order-lg-first">
+
+                <!-- Live Logs (Moved to Top) -->
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>Live Terminal Output</span>
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" id="autoScroll" checked>
+                            <label class="form-check-label small" for="autoScroll">Auto-scroll</label>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="log-viewer">Connecting to log stream...</div>
+                    </div>
+                </div>
+
+                <!-- Configuration -->
+                <div class="card">
+                    <div class="card-header bg-transparent">
+                        <h5 class="mb-0">Settings & Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="config-form">
+                            <div id="config-container">
+                                <div class="text-center p-4">
+                                    <span class="spinner-border spinner-border-sm" role="status"></span> Loading...
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
         </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    let isRunning = false;
-    let configData = {};
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let isRunning = false;
+        let configData = {};
 
-    // Dependency Mapping: "Child Section Key" -> "Parent Toggle Key"
-    // If the toggle is FALSE, the child section is hidden.
-    // Keys must match valid top-level config keys.
-    const DEPENDENCIES = {
-        'EMAIL': 'ENABLE_EMAIL_ALERTS',
-        'LLM': 'ENABLE_SMART_NOTES' // This is tricky as Smart Notes toggle is INSIDE LLM usually? No, let's see config.
-        // Actually in config.json: LLM: { ENABLE_SMART_NOTES: true, ... }
-        // So this dependency map needs to support paths or custom logic.
-        // Let's implement custom logic for known complex cases.
-    };
+        // --- UI CONFIG MAPPINGS ---
+        const SECTION_TITLES = {
+            'GSPREAD': 'Google Sheets Integration',
+            'LLM': 'AI Smart Notes (OpenAI)',
+            'EMAIL': 'Email Alerts',
+            'LIMITS': 'Safety Limits (Daily)',
+            'SCHEDULER': 'Working Hours Scheduler',
+            'SEARCH_SETTINGS': 'Search Parameters',
+            'DELAYS': 'Timing & Delays (Seconds)',
+            'LINKEDIN': 'LinkedIn Credentials',
+            'EXTRACTION': 'Profile Extraction Settings',
+            'BROWSER': 'Browser Settings'
+        };
 
-    function updateStatus() {
-        fetch('/api/status')
-            .then(response => response.json())
-            .then(data => {
+        // Special field configurations
+        const FIELD_CONFIG = {
+            'RUN_MODE': {
+                type: 'select',
+                options: ['ALL', 'FEED_ONLY', 'SEARCH_ONLY'],
+                label: 'Operation Mode'
+            },
+            'SCHEDULER.START_HOUR': { type: 'number', help: 'Leave empty/null to run 24/7' },
+            'SCHEDULER.END_HOUR': { type: 'number' },
+            'EXTRACTION.WAIT_TIMEOUT': { type: 'number', suffix: 'ms', help: 'Max wait time for page loads' }
+        };
+
+        // Internal toggle keys (keys inside a section that act as the master switch)
+        const INTERNAL_TOGGLES = {
+            'LLM': 'ENABLE_SMART_NOTES',
+            'GSPREAD': 'ENABLED'
+        };
+
+        // Root-level toggles that control other sections
+        const ROOT_DEPENDENCIES = {
+            'ENABLE_EMAIL_ALERTS': 'EMAIL'
+        };
+
+        function updateStatus() {
+            fetch('/api/status').then(r => r.json()).then(data => {
                 const badge = document.getElementById('status-badge');
-                const pidDisplay = document.getElementById('pid-display');
-                
                 if (data.running) {
-                    badge.className = 'badge bg-success';
-                    badge.innerText = 'RUNNING';
-                    pidDisplay.innerText = data.pid;
-                    isRunning = true;
+                    badge.className = 'badge bg-success'; badge.innerText = 'RUNNING'; isRunning = true;
                 } else {
-                    badge.className = 'badge bg-danger';
-                    badge.innerText = 'STOPPED';
-                    pidDisplay.innerText = '--';
-                    isRunning = false;
-                }
-            })
-            .catch(err => console.error('Status check failed:', err));
-    }
-
-    function startBot() {
-        fetch('/api/start', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                if(data.status === 'success') {
-                    // Toast or simple alert?
-                    updateStatus();
-                } else {
-                    alert('Error: ' + data.message);
+                    badge.className = 'badge bg-danger'; badge.innerText = 'STOPPED'; isRunning = false;
                 }
             });
-    }
+        }
 
-    function stopBot() {
-        fetch('/api/stop', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                updateStatus();
+        function startBot() { fetch('/api/start', { method: 'POST' }).then(r => r.json()).then(d => { alert(d.message); updateStatus(); }); }
+        function stopBot() { fetch('/api/stop', { method: 'POST' }).then(r => r.json()).then(d => { updateStatus(); }); }
+
+        function refreshLogs() {
+            fetch('/api/logs').then(r => r.json()).then(data => {
+                const el = document.getElementById('log-viewer');
+                // Parse logs for coloring
+                const styledLogs = data.logs.map(line => {
+                    // Regex to capture standard format: [TIMESTAMP] [LEVEL] [MODULE] - Message
+                    const match = line.match(/^\[(.*?)\] \[(.*?)\] \[(.*?)\] - (.*)$/);
+                    if (match) {
+                        const [_, ts, level, mod, msg] = match;
+                        let levelClass = 'log-level-info';
+                        if (level.includes('WARN')) levelClass = 'log-level-warn';
+                        if (level.includes('ERROR') || level.includes('FATAL')) levelClass = 'log-level-error';
+
+                        let modClass = 'log-module';
+                        if (mod === 'HUMAN') modClass += ' log-human';
+                        if (mod === 'CORE') modClass += ' log-core';
+
+                        return `<div><span class="log-timestamp">${ts}</span> <span class="${levelClass}">${level}</span> <span class="${modClass}">[${mod}]</span> <span class="log-message">${msg}</span></div>`;
+                    }
+                    return `<div>${line}</div>`; // Fallback
+                }).join('');
+
+                el.innerHTML = styledLogs; // Use innerHTML instead of innerText
+
+                if (document.getElementById('autoScroll').checked) el.scrollTop = el.scrollHeight;
             });
-    }
+        }
 
-    function refreshLogs() {
-        fetch('/api/logs')
-            .then(res => res.json())
-            .then(data => {
-                const logViewer = document.getElementById('log-viewer');
-                const wasScrolledToBottom = logViewer.scrollHeight - logViewer.scrollTop === logViewer.clientHeight;
-                
-                logViewer.innerText = data.logs.join('');
-                
-                if (document.getElementById('autoScroll').checked) {
-                    logViewer.scrollTop = logViewer.scrollHeight;
-                }
-            });
-    }
+        // --- HTML BUILDER ---
 
-    // --- Dynamic Config Builder ---
+        function buildConfigForm(data) {
+            let html = '';
 
-    function buildConfigForm(data) {
-        let html = '';
-        
-        // 1. Root Level Toggles (Handle First)
-        // We look for specific boolean keys at root that control sections
-        // e.g., ENABLE_EMAIL_ALERTS
-        
-        const rootToggles = ['ENABLE_AUTOMATION', 'ENABLE_EMAIL_ALERTS', 'EMAIL_ON_CAPTCHA'];
-        
-        html += '<div class="row mb-3">';
-        rootToggles.forEach(key => {
-            if (data.hasOwnProperty(key)) {
-                const val = data[key];
-                const cleanName = key.replace(/_/g, ' ').replace('ENABLE ', ''); 
+            // 1. Root Primitives & Main Toggles
+            const rootKeys = Object.keys(data).filter(k => typeof data[k] !== 'object' && k !== 'RUN_MODE');
+            html += '<div class="row mb-4 g-2">'; // g-2 for tighter gutters
+
+            // Render RUN_MODE first (taking 50% width or full on mobile)
+            if (data.hasOwnProperty('RUN_MODE')) {
+                const val = data['RUN_MODE'];
+                const config = FIELD_CONFIG['RUN_MODE'];
+                let optionsHtml = '';
+                config.options.forEach(opt => { optionsHtml += `<option value="${opt}" ${val === opt ? 'selected' : ''}>${opt}</option>`; });
+
                 html += `
-                <div class="col-md-4">
-                    <div class="form-check form-switch p-2 border rounded bg-white">
-                        <input class="form-check-input config-input toggle-trigger" type="checkbox" id="${key}" ${val ? 'checked' : ''} data-type="boolean" onchange="handleToggleChange('${key}')">
-                        <label class="form-check-label fw-bold small" for="${key}">${cleanName}</label>
+             <div class="col-md-6">
+                <div class="p-2 border rounded bg-white h-100 d-flex flex-column justify-content-center">
+                    <label class="form-label small fw-bold text-muted mb-1">${config.label}</label>
+                    <select class="form-select form-select-sm config-input" id="RUN_MODE" data-type="string">
+                        ${optionsHtml}
+                    </select>
+                </div>
+             </div>`;
+            }
+
+            rootKeys.forEach(k => {
+                if (k === 'RUN_MODE') return;
+                if (typeof data[k] === 'boolean') {
+                    const label = k.replace(/_/g, ' ').replace('ENABLE ', '');
+                    html += `
+                <div class="col-md-3 col-6">
+                    <div class="form-check form-switch p-2 border rounded bg-white h-100 d-flex align-items-center justify-content-between">
+                        <label class="form-check-label small fw-bold me-2" for="${k}">${label}</label>
+                        <input class="form-check-input config-input m-0" type="checkbox" id="${k}" ${data[k] ? 'checked' : ''} data-type="boolean" onchange="handleRootToggle('${k}')">
                     </div>
                 </div>`;
-            }
-        });
-        html += '</div>';
-
-        // 2. Sections
-        for (const key in data) {
-            // Skip root primitives we already handled or want to hide
-            if (typeof data[key] !== 'object' || data[key] === null) {
-                if (rootToggles.includes(key)) continue; 
-                // Render other root primitives if any? (e.g. RUN_MODE)
-                html += renderField(key, data[key], key);
-                continue;
-            }
-
-            // It's an object (Section)
-            const sectionData = data[key];
-            const sectionId = `section-${key}`;
-            
-            // Determine if this section is controlled by a root toggle
-            let controlledBy = null;
-            if (key === 'EMAIL') controlledBy = 'ENABLE_EMAIL_ALERTS';
-            
-            // Check if section contains its OWN toggle (e.g. LLM.ENABLE_SMART_NOTES)
-            // If so, we might want to render that toggle in the header.
-            let internalToggleKey = null;
-            if (key === 'LLM' && sectionData.hasOwnProperty('ENABLE_SMART_NOTES')) internalToggleKey = 'ENABLE_SMART_NOTES';
-            
-            // Visibility style
-            let displayStyle = 'block';
-            if (controlledBy && !data[controlledBy]) displayStyle = 'none';
-
-            html += `<fieldset class="config-fieldset" id="${sectionId}" style="display: ${displayStyle};">`;
-            
-            // Legend / Header
-            html += `<legend class="config-legend d-flex align-items-center justify-content-between w-100">`;
-            html += `<span>${key}</span>`;
-            
-            // If internal toggle exists, put it here
-            if (internalToggleKey) {
-                const toggleId = `${key}.${internalToggleKey}`;
-                const isChecked = sectionData[internalToggleKey];
-                 html += `
-                    <div class="form-check form-switch m-0">
-                        <input class="form-check-input config-input shadow-none" type="checkbox" id="${toggleId}" ${isChecked ? 'checked' : ''} data-type="boolean" onchange="handleSectionInternalToggle('${sectionId}', this)">
-                        <label class="form-check-label small ms-1 text-muted" for="${toggleId}">Enable</label>
-                    </div>`;
-            }
-            html += `</legend>`;
-            html += `<div class="section-body">`; // Wrapper for collapsible content
-
-            // Render children
-            for (const subKey in sectionData) {
-                if (subKey === internalToggleKey) continue; // Already rendered in header
-                const fieldId = `${key}.${subKey}`;
-                html += renderField(subKey, sectionData[subKey], fieldId);
-            }
-            
-            html += `</div></fieldset>`;
-        }
-        
-        return html;
-    }
-
-    function renderField(label, value, id) {
-        let html = `<div class="mb-3 row input-group-sm">`;
-        html += `<label class="col-sm-4 col-form-label text-truncate small" title="${label}">${label}</label>`;
-        html += `<div class="col-sm-8">`;
-        
-        if (typeof value === 'boolean') {
-             html += `<div class="form-check form-switch pt-1">
-                        <input class="form-check-input config-input" type="checkbox" id="${id}" ${value ? 'checked' : ''} data-type="boolean">
-                     </div>`;
-        } else if (typeof value === 'number') {
-            html += `<input type="number" class="form-control config-input" id="${id}" value="${value}" data-type="number">`;
-        } else {
-             // Handle nulls as empty string or specific text
-             const safeVal = value === null ? '' : value;
-             html += `<input type="text" class="form-control config-input" id="${id}" value="${safeVal}" data-type="string">`;
-        }
-        
-        html += `</div></div>`;
-        return html;
-    }
-
-    // --- Dynamic Handlers ---
-
-    window.handleToggleChange = function(toggleKey) {
-        // Handle dependencies
-        if (DEPENDENCIES_REVERSE[toggleKey]) {
-            const sectionKey = DEPENDENCIES_REVERSE[toggleKey];
-            const sectionEl = document.getElementById(`section-${sectionKey}`);
-            const isChecked = document.getElementById(toggleKey).checked;
-            
-            if (sectionEl) {
-                sectionEl.style.display = isChecked ? 'block' : 'none';
-            }
-        }
-    };
-    
-    // Internal toggles (like LLM Smart Notes) hide/show the REST of the section
-    window.handleSectionInternalToggle = function(sectionId, toggleEl) {
-        const sectionBody = document.querySelector(`#${sectionId} .section-body`);
-        if (sectionBody) {
-             sectionBody.style.opacity = toggleEl.checked ? '1' : '0.5';
-             sectionBody.style.pointerEvents = toggleEl.checked ? 'auto' : 'none';
-        }
-    }
-    
-    const DEPENDENCIES_REVERSE = {
-        'ENABLE_EMAIL_ALERTS': 'EMAIL'
-    };
-
-    function loadConfig() {
-        const container = document.getElementById('config-container');
-        container.innerHTML = '<div class="text-center p-4">Loading...</div>';
-        
-        fetch('/api/config')
-            .then(res => res.json())
-            .then(data => {
-                configData = data; 
-                const formHtml = buildConfigForm(data);
-                container.innerHTML = formHtml;
-                
-                // Initialize Internal Toggles State
-                // We need to re-run logic for internal toggles to set initial opacity
-                 document.querySelectorAll('input[onchange^="handleSectionInternalToggle"]').forEach(el => {
-                     // trigger change handler logic without event
-                     const sectionId = el.getAttribute('onchange').match(/'([^']+)'/)[1];
-                     handleSectionInternalToggle(sectionId, el);
-                 });
+                } else {
+                    // Fallback for other root primitives if any
+                    html += `<div class="col-md-6">` + renderField(k, data[k], k) + `</div>`;
+                }
             });
-    }
+            html += '</div>';
 
-    function saveConfig() {
-        // Parsing logic remains similar, but robust for deep keys
-        const inputs = document.querySelectorAll('.config-input');
-        const newConfig = JSON.parse(JSON.stringify(configData)); 
-        
-        inputs.forEach(input => {
-            const path = input.id.split('.');
-            let current = newConfig;
-            
-            for (let i = 0; i < path.length - 1; i++) {
-                current = current[path[i]];
+            // 2. Sections
+            for (const key in data) {
+                if (typeof data[key] !== 'object' || data[key] === null) continue; // Skip primitives
+
+                const sectionData = data[key];
+                const sectionId = `section-${key}`;
+                const niceTitle = SECTION_TITLES[key] || key;
+                const toggleKey = INTERNAL_TOGGLES[key];
+
+                // Check visibility based on root dependencies
+                // Find which root key controls this section (reverse lookup)
+                const controllerKey = Object.keys(ROOT_DEPENDENCIES).find(rk => ROOT_DEPENDENCIES[rk] === key);
+                const isVisible = controllerKey ? data[controllerKey] : true;
+
+                html += `<fieldset class="config-fieldset" id="${sectionId}" style="display: ${isVisible ? 'block' : 'none'};">`;
+                html += `<div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">`;
+                html += `<h6 class="m-0 text-primary">${niceTitle}</h6>`;
+
+                // Internal Header Toggle (e.g. Google Sheets Enable)
+                if (toggleKey && sectionData.hasOwnProperty(toggleKey)) {
+                    const tId = `${key}.${toggleKey}`;
+                    html += `
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input config-input" type="checkbox" id="${tId}" ${sectionData[toggleKey] ? 'checked' : ''} data-type="boolean" onchange="handleInternalToggle('${sectionId}', this)">
+                    <label class="form-check-label small text-muted ms-1" for="${tId}">Enabled</label>
+                </div>`;
+                }
+                html += `</div>`;
+
+                // Body
+                const isDimmed = (toggleKey && !sectionData[toggleKey]);
+                html += `<div class="section-body ${isDimmed ? 'dimmed' : ''}">`;
+
+                for (const subKey in sectionData) {
+                    if (subKey === toggleKey) continue; // Skip the header toggle
+                    const fId = `${key}.${subKey}`;
+                    html += renderField(subKey, sectionData[subKey], fId, key);
+                }
+                html += `</div></fieldset>`;
             }
-            
-            const lastKey = path[path.length - 1];
-            if (input.dataset.type === 'boolean') {
-                current[lastKey] = input.checked;
-            } else if (input.dataset.type === 'number') {
-                current[lastKey] = Number(input.value);
+            return html;
+        }
+
+        function renderField(key, value, id, parentKey = null) {
+            const fullKey = parentKey ? `${parentKey}.${key}` : key;
+            const config = FIELD_CONFIG[fullKey] || FIELD_CONFIG[key] || {};
+
+            const label = config.label || key.replace(/_/g, ' ');
+            const help = config.help ? `<div class="form-text mt-0 mb-1" style="font-size:0.75rem">${config.help}</div>` : '';
+            const suffix = config.suffix ? `<span class="input-group-text">${config.suffix}</span>` : '';
+
+            let inputHtml = '';
+
+            if (config.type === 'select') {
+                inputHtml = `<select class="form-select config-input" id="${id}" data-type="string">`;
+                config.options.forEach(opt => {
+                    inputHtml += `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`;
+                });
+                inputHtml += `</select>`;
+            } else if (typeof value === 'boolean') {
+                inputHtml = `<div class="form-check form-switch pt-2">
+                            <input class="form-check-input config-input" type="checkbox" id="${id}" ${value ? 'checked' : ''} data-type="boolean">
+                         </div>`;
+            } else if (typeof value === 'number' || config.type === 'number') {
+                const valStr = value === null ? '' : value;
+                inputHtml = `<div class="input-group input-group-sm">
+                            <input type="number" class="form-control config-input" id="${id}" value="${valStr}" data-type="number" step="any">
+                            ${suffix}
+                         </div>`;
             } else {
-                // String handling
-                current[lastKey] = input.value === "" && configData[path[0]]?.[lastKey] === null ? null : input.value;
+                const valStr = value === null ? '' : value;
+                inputHtml = `<input type="text" class="form-control form-control-sm config-input" id="${id}" value="${valStr}" data-type="string">`;
             }
-        });
-        
-        fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newConfig)
-        })
-        .then(res => res.json())
-        .then(data => {
-             // Visual feedback
-             const btn = document.querySelector('button[onclick="saveConfig()"]');
-             const originalText = btn.innerText;
-             btn.innerText = "Saved!";
-             btn.classList.remove('btn-primary');
-             btn.classList.add('btn-success');
-             setTimeout(() => {
-                 btn.innerText = originalText;
-                 btn.classList.add('btn-primary');
-                 btn.classList.remove('btn-success');
-             }, 2000);
-        });
-    }
 
-    // Init
-    updateStatus();
-    loadConfig();
-    setInterval(updateStatus, 3000);
-    setInterval(refreshLogs, 1000);
+            // Layout
+            // If it's a standalone root field (like RUN_MODE), use full width?
+            if (fullKey === 'RUN_MODE') {
+                return `<label class="form-label small fw-bold mb-1">${label}</label>${inputHtml}${help}`;
+            }
 
-</script>
+            return `
+        <div class="mb-2 row align-items-center">
+            <label class="col-sm-4 col-form-label col-form-label-sm text-truncate" title="${key}">${label}</label>
+            <div class="col-sm-8">
+                ${inputHtml}
+                ${help}
+            </div>
+        </div>`;
+        }
+
+        // --- LOGIC HANDLERS ---
+
+        window.handleRootToggle = function (key) {
+            const targetSectionKey = ROOT_DEPENDENCIES[key];
+            if (targetSectionKey) {
+                const el = document.getElementById(`section-${targetSectionKey}`);
+                const checked = document.getElementById(key).checked;
+                if (el) el.style.display = checked ? 'block' : 'none';
+            }
+        }
+
+        window.handleInternalToggle = function (sectionId, toggle) {
+            const body = document.querySelector(`#${sectionId} .section-body`);
+            if (body) {
+                if (toggle.checked) {
+                    body.classList.remove('dimmed');
+                } else {
+                    body.classList.add('dimmed');
+                }
+            }
+        }
+
+        function loadConfig() {
+            document.getElementById('config-container').innerHTML = '<div class="text-center p-4">Loading...</div>';
+            fetch('/api/config').then(r => r.json()).then(data => {
+                configData = data;
+                document.getElementById('config-container').innerHTML = buildConfigForm(data);
+            });
+        }
+
+        function saveConfig() {
+            const inputs = document.querySelectorAll('.config-input');
+            const newConfig = JSON.parse(JSON.stringify(configData));
+
+            inputs.forEach(input => {
+                const path = input.id.split('.');
+                let current = newConfig;
+                for (let i = 0; i < path.length - 1; i++) current = current[path[i]];
+
+                const lastKey = path[path.length - 1];
+                if (input.dataset.type === 'boolean') {
+                    current[lastKey] = input.checked;
+                } else if (input.dataset.type === 'number') {
+                    current[lastKey] = input.value === "" ? null : Number(input.value);
+                } else {
+                    // Selects or Strings
+                    current[lastKey] = input.value;
+                }
+            });
+
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newConfig)
+            }).then(r => r.json()).then(d => {
+                const btn = document.querySelector('button[onclick="saveConfig()"]');
+                btn.innerText = "Saved!"; btn.classList.replace('btn-primary', 'btn-success');
+                setTimeout(() => { btn.innerText = "Save & Apply Changes"; btn.classList.replace('btn-success', 'btn-primary'); }, 2000);
+            });
+        }
+
+        updateStatus();
+        loadConfig();
+        setInterval(updateStatus, 3000);
+        setInterval(refreshLogs, 1000);
+
+    </script>
 </body>
+
 </html>

@@ -49,28 +49,23 @@ A safe, human-like autonomous agent for ongoing LinkedIn engagement. This bot ru
       LINKEDIN_PASSWORD=your_password
       ```
 
-## ▶️ Usage (Web Interface)
+## 💻 Web Interface & Dashboard
 
-The recommended way to use the bot is via the new Web Interface.
+This project features a powerful, modern Web Dashboard for managing the bot, viewing live logs, and updating configurations.
 
-1.  **Start the Web App**:
+### Starting the Dashboard
+
+1.  **Activate the Environment**:
+    ```bash
+    # Windows
+    .venv\Scripts\activate
+    # Linux/Mac
+    source .venv/bin/activate
+    ```
+2.  **Run the Web App**:
     ```bash
     python web_app.py
     ```
-
-2.  **Open Dashboard**:
-    - Go to [http://localhost:5000](http://localhost:5000) in your browser.
-
-3.  **Control & Configure**:
-    - **Start/Stop**: Use the big buttons to control the bot process.
-    - **Live Logs**: Watch the bot's activities in real-time.
-    - **Configuration**: Scroll down to the Configuration section to edit settings (Speed, Limits, Headless Mode, etc.). Click **Save Config** to apply changes immediately (restart bot to take effect).
-
-## ⚙️ Configuration Guide
-
-Configuration is now stored in `config/config.json` and can be edited via the Web Interface.
-
-### Key Settings
 - **BROWSER.HEADLESS**: Set to `true` to run the bot invisibly, or `false` to see the browser.
 - **LIMITS**: Set daily limits for likes, visits, and connections.
 - **SCHEDULER**: Define `START_HOUR` and `END_HOUR` to simulate working hours. Set `START_HOUR` to `null` to run 24/7.
