@@ -6,75 +6,120 @@
     <title>LinkedIn Bot Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; }
         #log-viewer {
             background-color: #1e1e1e;
             color: #00ff00;
             font-family: 'Courier New', Courier, monospace;
             padding: 15px;
-            height: 400px;
+            height: 500px;
             overflow-y: scroll;
-            border-radius: 5px;
+            border-radius: 8px;
             white-space: pre-wrap;
+            font-size: 0.9em;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
         }
-        .status-running { color: green; font-weight: bold; }
-        .status-stopped { color: red; font-weight: bold; }
-        .card { margin-bottom: 20px; }
+        .status-running { color: #198754; font-weight: bold; } /* Bootstrap Success Green */
+        .status-stopped { color: #dc3545; font-weight: bold; } /* Bootstrap Danger Red */
+        .card { 
+            border: none; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background-color: #fff;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+            border-radius: 10px 10px 0 0 !important;
+            padding: 15px 20px;
+        }
+        .btn-control { padding: 10px; font-weight: 600; letter-spacing: 0.5px; }
+        
+        /* Config Styling */
+        .config-fieldset { margin-bottom: 15px; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; background: #fff; }
+        .config-legend { float: none; width: auto; padding: 0 10px; margin: 0; font-size: 1rem; font-weight: 600; color: #495057; }
+        .form-label { font-size: 0.9rem; color: #6c757d; font-weight: 500; }
+        .form-control:focus, .form-check-input:focus { box-shadow: 0 0 0 0.25rem rgba(13,110,253,0.15); border-color: #86b7fe; }
     </style>
 </head>
-<body class="bg-light">
+<body class="pb-5">
 
-<div class="container mt-4">
-    <h1 class="mb-4">LinkedIn Bot Control Panel</h1>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container">
+        <a class="navbar-brand" href="#">🤖 Antigravity Agent</a>
+    </div>
+</nav>
+
+<div class="container">
     
-    <div class="row">
+    <div class="row g-4">
         <!-- Controls Column -->
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">Status & Control</div>
-                <div class="card-body text-center">
-                    <h5 id="status-indicator">Status: checking...</h5>
-                    <hr>
-                    <button class="btn btn-success w-100 mb-2" onclick="startBot()">START BOT</button>
-                    <button class="btn btn-danger w-100" onclick="stopBot()">STOP BOT</button>
+        <div class="col-lg-4 order-lg-last">
+            <div class="card bg-white">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>System Status</span>
+                    <span id="status-badge" class="badge bg-secondary">Unknown</span>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success btn-control" onclick="startBot()">
+                             START AGENT
+                        </button>
+                        <button class="btn btn-danger btn-control" onclick="stopBot()">
+                             STOP AGENT
+                        </button>
+                    </div>
+                    <div class="mt-3 text-center small text-muted">
+                        PID: <span id="pid-display">--</span>
+                    </div>
                 </div>
             </div>
 
-             <div class="card">
-                <div class="card-header">Quick Actions</div>
+             <div class="card bg-white">
+                <div class="card-header">Configuration Actions</div>
                 <div class="card-body">
-                    <button class="btn btn-primary w-100 mb-2" onclick="saveConfig()">Save Config</button>
-                    <button class="btn btn-secondary w-100" onclick="loadConfig()">Reload Config</button>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" onclick="saveConfig()">Save & Apply Changes</button>
+                        <button class="btn btn-outline-secondary" onclick="loadConfig()">Discard & Reload</button>
+                    </div>
                 </div>
             </div>
         </div>
         
         <!-- Logs Column -->
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">Live Logs (logs/bot.log)</div>
+        <div class="col-lg-8 order-lg-first">
+             <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Config Editor</span>
+                </div>
+                <!-- Configuration Section -->
                 <div class="card-body">
-                    <div id="log-viewer">Waiting for logs...</div>
-                    <div class="form-check mt-2">
-                        <input class="form-check-input" type="checkbox" value="" id="autoScroll" checked>
-                        <label class="form-check-label" for="autoScroll">
-                            Auto-scroll
-                        </label>
+                     <form id="config-form">
+                        <div id="config-container">
+                            <div class="text-center p-4">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="mt-2 text-muted">Loading configuration...</p>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Live Terminal Output</div>
+                <div class="card-body p-0">
+                    <div id="log-viewer">Connecting to log stream...</div>
+                </div>
+                <div class="card-footer bg-white border-0">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="autoScroll" checked>
+                        <label class="form-check-label small" for="autoScroll">Auto-scroll logs</label>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Configuration Section -->
-    <div class="card">
-        <div class="card-header">Configuration</div>
-        <div class="card-body">
-            <form id="config-form">
-                <div id="config-container">Loading configuration...</div>
-            </form>
-        </div>
-    </div>
-
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -82,16 +127,33 @@
     let isRunning = false;
     let configData = {};
 
+    // Dependency Mapping: "Child Section Key" -> "Parent Toggle Key"
+    // If the toggle is FALSE, the child section is hidden.
+    // Keys must match valid top-level config keys.
+    const DEPENDENCIES = {
+        'EMAIL': 'ENABLE_EMAIL_ALERTS',
+        'LLM': 'ENABLE_SMART_NOTES' // This is tricky as Smart Notes toggle is INSIDE LLM usually? No, let's see config.
+        // Actually in config.json: LLM: { ENABLE_SMART_NOTES: true, ... }
+        // So this dependency map needs to support paths or custom logic.
+        // Let's implement custom logic for known complex cases.
+    };
+
     function updateStatus() {
         fetch('/api/status')
             .then(response => response.json())
             .then(data => {
-                const el = document.getElementById('status-indicator');
+                const badge = document.getElementById('status-badge');
+                const pidDisplay = document.getElementById('pid-display');
+                
                 if (data.running) {
-                    el.innerHTML = 'Status: <span class="status-running">RUNNING (PID: ' + data.pid + ')</span>';
+                    badge.className = 'badge bg-success';
+                    badge.innerText = 'RUNNING';
+                    pidDisplay.innerText = data.pid;
                     isRunning = true;
                 } else {
-                    el.innerHTML = 'Status: <span class="status-stopped">STOPPED</span>';
+                    badge.className = 'badge bg-danger';
+                    badge.innerText = 'STOPPED';
+                    pidDisplay.innerText = '--';
                     isRunning = false;
                 }
             })
@@ -102,8 +164,12 @@
         fetch('/api/start', { method: 'POST' })
             .then(res => res.json())
             .then(data => {
-                alert(data.message);
-                updateStatus();
+                if(data.status === 'success') {
+                    // Toast or simple alert?
+                    updateStatus();
+                } else {
+                    alert('Error: ' + data.message);
+                }
             });
     }
 
@@ -111,7 +177,6 @@
         fetch('/api/stop', { method: 'POST' })
             .then(res => res.json())
             .then(data => {
-                alert(data.message);
                 updateStatus();
             });
     }
@@ -121,6 +186,8 @@
             .then(res => res.json())
             .then(data => {
                 const logViewer = document.getElementById('log-viewer');
+                const wasScrolledToBottom = logViewer.scrollHeight - logViewer.scrollTop === logViewer.clientHeight;
+                
                 logViewer.innerText = data.logs.join('');
                 
                 if (document.getElementById('autoScroll').checked) {
@@ -129,54 +196,166 @@
             });
     }
 
-    // Config Builder (Recursive for nested JSON)
-    function buildConfigForm(data, prefix = '') {
+    // --- Dynamic Config Builder ---
+
+    function buildConfigForm(data) {
         let html = '';
-        console.log("Building config for", prefix, data); // Debug
         
-        for (const key in data) {
-            const val = data[key];
-            const fieldId = prefix ? prefix + '.' + key : key;
-            
-            if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-                html += `<fieldset class="border p-2 mb-2"><legend class="w-auto fs-6">${key}</legend>`;
-                html += buildConfigForm(val, fieldId);
-                html += `</fieldset>`;
-            } else {
-                html += `<div class="mb-2 row">`;
-                html += `<label class="col-sm-4 col-form-label text-truncate" title="${key}">${key}</label>`;
-                html += `<div class="col-sm-8">`;
-                
-                if (typeof val === 'boolean') {
-                    html += `<div class="form-check form-switch pt-2">
-                                <input class="form-check-input config-input" type="checkbox" id="${fieldId}" ${val ? 'checked' : ''} data-type="boolean">
-                             </div>`;
-                } else if (typeof val === 'number') {
-                    html += `<input type="number" class="form-control config-input" id="${fieldId}" value="${val}" data-type="number">`;
-                } else {
-                    html += `<input type="text" class="form-control config-input" id="${fieldId}" value="${val}" data-type="string">`;
-                }
-                
-                html += `</div></div>`;
+        // 1. Root Level Toggles (Handle First)
+        // We look for specific boolean keys at root that control sections
+        // e.g., ENABLE_EMAIL_ALERTS
+        
+        const rootToggles = ['ENABLE_AUTOMATION', 'ENABLE_EMAIL_ALERTS', 'EMAIL_ON_CAPTCHA'];
+        
+        html += '<div class="row mb-3">';
+        rootToggles.forEach(key => {
+            if (data.hasOwnProperty(key)) {
+                const val = data[key];
+                const cleanName = key.replace(/_/g, ' ').replace('ENABLE ', ''); 
+                html += `
+                <div class="col-md-4">
+                    <div class="form-check form-switch p-2 border rounded bg-white">
+                        <input class="form-check-input config-input toggle-trigger" type="checkbox" id="${key}" ${val ? 'checked' : ''} data-type="boolean" onchange="handleToggleChange('${key}')">
+                        <label class="form-check-label fw-bold small" for="${key}">${cleanName}</label>
+                    </div>
+                </div>`;
             }
+        });
+        html += '</div>';
+
+        // 2. Sections
+        for (const key in data) {
+            // Skip root primitives we already handled or want to hide
+            if (typeof data[key] !== 'object' || data[key] === null) {
+                if (rootToggles.includes(key)) continue; 
+                // Render other root primitives if any? (e.g. RUN_MODE)
+                html += renderField(key, data[key], key);
+                continue;
+            }
+
+            // It's an object (Section)
+            const sectionData = data[key];
+            const sectionId = `section-${key}`;
+            
+            // Determine if this section is controlled by a root toggle
+            let controlledBy = null;
+            if (key === 'EMAIL') controlledBy = 'ENABLE_EMAIL_ALERTS';
+            
+            // Check if section contains its OWN toggle (e.g. LLM.ENABLE_SMART_NOTES)
+            // If so, we might want to render that toggle in the header.
+            let internalToggleKey = null;
+            if (key === 'LLM' && sectionData.hasOwnProperty('ENABLE_SMART_NOTES')) internalToggleKey = 'ENABLE_SMART_NOTES';
+            
+            // Visibility style
+            let displayStyle = 'block';
+            if (controlledBy && !data[controlledBy]) displayStyle = 'none';
+
+            html += `<fieldset class="config-fieldset" id="${sectionId}" style="display: ${displayStyle};">`;
+            
+            // Legend / Header
+            html += `<legend class="config-legend d-flex align-items-center justify-content-between w-100">`;
+            html += `<span>${key}</span>`;
+            
+            // If internal toggle exists, put it here
+            if (internalToggleKey) {
+                const toggleId = `${key}.${internalToggleKey}`;
+                const isChecked = sectionData[internalToggleKey];
+                 html += `
+                    <div class="form-check form-switch m-0">
+                        <input class="form-check-input config-input shadow-none" type="checkbox" id="${toggleId}" ${isChecked ? 'checked' : ''} data-type="boolean" onchange="handleSectionInternalToggle('${sectionId}', this)">
+                        <label class="form-check-label small ms-1 text-muted" for="${toggleId}">Enable</label>
+                    </div>`;
+            }
+            html += `</legend>`;
+            html += `<div class="section-body">`; // Wrapper for collapsible content
+
+            // Render children
+            for (const subKey in sectionData) {
+                if (subKey === internalToggleKey) continue; // Already rendered in header
+                const fieldId = `${key}.${subKey}`;
+                html += renderField(subKey, sectionData[subKey], fieldId);
+            }
+            
+            html += `</div></fieldset>`;
         }
+        
         return html;
     }
 
+    function renderField(label, value, id) {
+        let html = `<div class="mb-3 row input-group-sm">`;
+        html += `<label class="col-sm-4 col-form-label text-truncate small" title="${label}">${label}</label>`;
+        html += `<div class="col-sm-8">`;
+        
+        if (typeof value === 'boolean') {
+             html += `<div class="form-check form-switch pt-1">
+                        <input class="form-check-input config-input" type="checkbox" id="${id}" ${value ? 'checked' : ''} data-type="boolean">
+                     </div>`;
+        } else if (typeof value === 'number') {
+            html += `<input type="number" class="form-control config-input" id="${id}" value="${value}" data-type="number">`;
+        } else {
+             // Handle nulls as empty string or specific text
+             const safeVal = value === null ? '' : value;
+             html += `<input type="text" class="form-control config-input" id="${id}" value="${safeVal}" data-type="string">`;
+        }
+        
+        html += `</div></div>`;
+        return html;
+    }
+
+    // --- Dynamic Handlers ---
+
+    window.handleToggleChange = function(toggleKey) {
+        // Handle dependencies
+        if (DEPENDENCIES_REVERSE[toggleKey]) {
+            const sectionKey = DEPENDENCIES_REVERSE[toggleKey];
+            const sectionEl = document.getElementById(`section-${sectionKey}`);
+            const isChecked = document.getElementById(toggleKey).checked;
+            
+            if (sectionEl) {
+                sectionEl.style.display = isChecked ? 'block' : 'none';
+            }
+        }
+    };
+    
+    // Internal toggles (like LLM Smart Notes) hide/show the REST of the section
+    window.handleSectionInternalToggle = function(sectionId, toggleEl) {
+        const sectionBody = document.querySelector(`#${sectionId} .section-body`);
+        if (sectionBody) {
+             sectionBody.style.opacity = toggleEl.checked ? '1' : '0.5';
+             sectionBody.style.pointerEvents = toggleEl.checked ? 'auto' : 'none';
+        }
+    }
+    
+    const DEPENDENCIES_REVERSE = {
+        'ENABLE_EMAIL_ALERTS': 'EMAIL'
+    };
+
     function loadConfig() {
+        const container = document.getElementById('config-container');
+        container.innerHTML = '<div class="text-center p-4">Loading...</div>';
+        
         fetch('/api/config')
             .then(res => res.json())
             .then(data => {
-                configData = data; // Store raw data
+                configData = data; 
                 const formHtml = buildConfigForm(data);
-                document.getElementById('config-container').innerHTML = formHtml;
+                container.innerHTML = formHtml;
+                
+                // Initialize Internal Toggles State
+                // We need to re-run logic for internal toggles to set initial opacity
+                 document.querySelectorAll('input[onchange^="handleSectionInternalToggle"]').forEach(el => {
+                     // trigger change handler logic without event
+                     const sectionId = el.getAttribute('onchange').match(/'([^']+)'/)[1];
+                     handleSectionInternalToggle(sectionId, el);
+                 });
             });
     }
 
     function saveConfig() {
-        // Reconstruct JSON from form
+        // Parsing logic remains similar, but robust for deep keys
         const inputs = document.querySelectorAll('.config-input');
-        const newConfig = JSON.parse(JSON.stringify(configData)); // Deep copy helper
+        const newConfig = JSON.parse(JSON.stringify(configData)); 
         
         inputs.forEach(input => {
             const path = input.id.split('.');
@@ -192,10 +371,8 @@
             } else if (input.dataset.type === 'number') {
                 current[lastKey] = Number(input.value);
             } else {
-                current[lastKey] = input.value !== "null" ? input.value : null;
-                // Handle "null" string if user wants true null? For now, string literal.
-                // Simple hack for nulls in JSON:
-                if (input.value === "" && configData[lastKey] === null) current[lastKey] = null;
+                // String handling
+                current[lastKey] = input.value === "" && configData[path[0]]?.[lastKey] === null ? null : input.value;
             }
         });
         
@@ -205,13 +382,25 @@
             body: JSON.stringify(newConfig)
         })
         .then(res => res.json())
-        .then(data => alert(data.message));
+        .then(data => {
+             // Visual feedback
+             const btn = document.querySelector('button[onclick="saveConfig()"]');
+             const originalText = btn.innerText;
+             btn.innerText = "Saved!";
+             btn.classList.remove('btn-primary');
+             btn.classList.add('btn-success');
+             setTimeout(() => {
+                 btn.innerText = originalText;
+                 btn.classList.add('btn-primary');
+                 btn.classList.remove('btn-success');
+             }, 2000);
+        });
     }
 
     // Init
     updateStatus();
     loadConfig();
-    setInterval(updateStatus, 5000);
+    setInterval(updateStatus, 3000);
     setInterval(refreshLogs, 1000);
 
 </script>
