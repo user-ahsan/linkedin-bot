@@ -7,3 +7,4 @@ openai
 python-dotenv
 oauth2client
 flask
+playwright-stealth

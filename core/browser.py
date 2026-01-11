@@ -1,4 +1,5 @@
 from playwright.sync_api import sync_playwright
+from playwright_stealth import Stealth
 from config.config import CONFIG
 from core.logger import log_info, log_error, log_fatal
 import sys
@@ -52,19 +53,23 @@ class BrowserManager:
                     headless=headless_mode,
                     channel="chrome", # Try to use installed chrome or default
                     args=stealth_args,
-                    viewport=None, # Uses actual window size
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    viewport={"width": 1920, "height": 1080}, # Set explicit viewport for consistency
                     timeout=30000,
                     ignore_default_args=["--enable-automation"]  # Crucial for hiding automation bar
                 )
                 
                 # Apply Stealth Scripts
-                self.context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                # self.context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})") # Handled by stealth_sync
                 
                 # Get the first page or create new one
                 if len(self.context.pages) > 0:
                     self.page = self.context.pages[0]
                 else:
                     self.page = self.context.new_page()
+                
+                # Apply Playwright Stealth
+                Stealth().use_sync(self.page)
                     
                 log_info("Browser launched successfully.")
                 return self.page

@@ -27,9 +27,39 @@ def random_delay(action_type="ACTION"):
     log_info(f"Sleeping for {delay:.2f}s ({action_type})", module="HUMAN")
     time.sleep(delay)
 
+def human_jitter(page):
+    """
+    Simulates small, random nervous mouse movements (jitter) simulation.
+    Useful for 'idle' times.
+    """
+    try:
+        # Get current mouse position (not directly available in pure playwright without tracking, 
+        # so we just move relative to a guess or small offsets if we don't know).
+        # Since we can't get current pos easily, we'll just move to a random point nearby 
+        # or just do a very small move from "center-ish" if we tracked it, 
+        # but Playwright doesn't expose strict "current" props easily. 
+        # Instead, we will making small moves in a loop.
+        
+        # NOTE: A better approach is imagining we are 'reading' and moving mouse slightly.
+        width = page.viewport_size['width']
+        height = page.viewport_size['height']
+        
+        start_x = random.randint(int(width * 0.2), int(width * 0.8))
+        start_y = random.randint(int(height * 0.2), int(height * 0.8))
+        
+        for _ in range(random.randint(2, 5)):
+            offset_x = random.randint(-15, 15)
+            offset_y = random.randint(-15, 15)
+            page.mouse.move(start_x + offset_x, start_y + offset_y, steps=random.randint(3, 10))
+            time.sleep(random.uniform(0.1, 0.3))
+            
+    except Exception as e:
+        # Non-critical 
+        pass
+
 def human_scroll(page):
     """
-    Scrolls the page in a human-like manner (random small scrolls, pauses, and speed variations).
+    Scrolls the page in a human-like manner (random small scrolls, reading pauses, reversals, and speed variations).
     """
     try:
         current_scroll = 0
@@ -41,9 +71,29 @@ def human_scroll(page):
             page.mouse.wheel(0, step)
             current_scroll += step
             
-            # Micro-pause occasionally
-            if random.random() < 0.3:
-                time.sleep(random.uniform(0.5, 1.2))
+            # 1. Micro-pause (reading a line)
+            if random.random() < 0.4:
+                time.sleep(random.uniform(0.5, 1.5))
+            
+            # 2. Reading Pause (longer stop)
+            if random.random() < 0.1:
+                # User stops to read something interesting
+                log_info("Simulating reading pause...", module="HUMAN")
+                time.sleep(random.uniform(2.0, 4.5))
+                # Maybe wiggle mouse while reading
+                if random.random() < 0.5:
+                    human_jitter(page)
+
+            # 3. Occasional small scroll UP (re-reading)
+            if random.random() < 0.05:
+                # Scroll up slightly
+                up_step = random.randint(20, 50)
+                page.mouse.wheel(0, -up_step)
+                time.sleep(random.uniform(0.5, 1.0))
+                # Then continue down
+                page.mouse.wheel(0, up_step) 
+
+            # Normal erratic timing
             else:
                 time.sleep(random.uniform(0.1, 0.4))
             
@@ -101,6 +151,11 @@ def safe_click(page, selector, timeout=5000):
                 # 3. Click
                 element.click()
                 log_info(f"Clicked: {selector}", module="HUMAN")
+                
+                # Optional: Jitter after click (indecision or checking result)
+                if random.random() < 0.2:
+                    human_jitter(page)
+                    
                 return True
             else:
                 # Fallback if no box
@@ -116,12 +171,24 @@ def safe_click(page, selector, timeout=5000):
 
 def type_text(page, selector, text):
     """
-    Types text with random delays between keystrokes.
+    Types text with random delays between keystrokes and occasional 'thinking' pauses.
     """
     try:
         # Focus first
         safe_click(page, selector)
-        page.type(selector, text, delay=random.randint(50, 150)) # Playwright type method handles delay
+        
+        # Type character by character manually for maximum control
+        for char in text:
+            page.keyboard.type(char, delay=random.randint(30, 100)) # Base fast typing
+            
+            # Occasional pause (thinking)
+            if random.random() < 0.05:
+                time.sleep(random.uniform(0.2, 0.8))
+                
+            # Occasional longer pause (sentence break)
+            if char in ['.', ',', '!', '?']:
+                time.sleep(random.uniform(0.3, 1.0))
+                
         log_info(f"Typed text into {selector}", module="HUMAN")
         return True
     except Exception as e:

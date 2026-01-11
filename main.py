@@ -3,6 +3,7 @@ import sys
 import os
 import random
 import re
+import msvcrt
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -25,8 +26,36 @@ from actions.note_generator import generate_note
 from actions.connect_actions import send_connection_request
 from actions.auth_actions import login_to_linkedin, check_session_health
 
+def check_keyboard_input():
+    if msvcrt.kbhit():
+        key = msvcrt.getch().decode('utf-8').lower()
+        if key == 's':
+            log_info("Command 's' received: Stopping/Skipping...", module="INPUT")
+            return 's'
+        elif key == 'q':
+            log_info("Command 'q' received: Quitting to menu...", module="INPUT")
+            return 'q'
+    return None
+
+def interruptible_sleep(seconds):
+    """
+    Sleeps for the given duration but checks for keyboard input every 0.1s.
+    Raises KeyboardInterrupt if 'q' is pressed.
+    Returns 's' if 's' is pressed, otherwise None.
+    """
+    end_time = time.time() + seconds
+    while time.time() < end_time:
+        cmd = check_keyboard_input()
+        if cmd == 'q':
+            raise KeyboardInterrupt("Quit command received during sleep")
+        if cmd == 's':
+            return 's'
+        time.sleep(0.1)
+    return None
+
 def main():
     log_info("BOOT: LinkedIn Autonomous Agent Starting...")
+    log_info("Commands: Press 's' to stop/skip current action, 'q' to quit to menu.")
     
     # Initialize Core Systems
     state_manager = StateManager()
@@ -53,6 +82,10 @@ def main():
 
         # Main Automation Loop
         while True:
+            cmd = check_keyboard_input()
+            if cmd == 'q':
+                break
+            
             # Check validity
             if not check_session_health(page):
                 log_warn("Session invalid. Re-attempting login...")
@@ -62,7 +95,8 @@ def main():
             # 1. Check Active Hours
             if not scheduler.is_within_active_hours():
                 log_info("Active hours ended. Sleeping/Exiting...")
-                time.sleep(600)
+                # Replace long sleep
+                if interruptible_sleep(600) == 'q': break
                 continue
                 
             # 2. Daily Reset Check
@@ -76,6 +110,9 @@ def main():
                 
             # 4. Feed Engagement (The "Human" distraction)
             try:
+                # We can't easily interrupt inside run_feed_cycle without modifying it, 
+                # but it should be fast or have its own sleeps. 
+                # For now we assume feed cycle is atomic enough.
                 run_feed_cycle(page, rate_limiter, captcha_detector, sheets_client)
             except Exception as e:
                 log_error(f"Feed cycle error: {e}")
@@ -91,7 +128,6 @@ def main():
             
             if keywords:
                 # Pick one keyword (round robin or random?)
-                # State has search_term_index
                 idx = state_manager.get_var("search_term_index", 0)
                 if idx >= len(keywords):
                     idx = 0
@@ -104,20 +140,24 @@ def main():
                      row = [str(datetime.datetime.now()), "SEARCH", keyword, "STARTED", "N/A"]
                      sheets_client.append_interaction(row)
                 
-                # PAGINATION LOOP (Exhaustive)
-                # Max 100 pages or until no results
+                # PAGINATION LOOP
                 for page_num in range(1, 101):
+                    # Check Input
+                    cmd = check_keyboard_input()
+                    if cmd == 's':
+                        log_info("Skipping search for this keyword...", module="INPUT")
+                        break
+                    if cmd == 'q':
+                        raise KeyboardInterrupt("Quit command received")
+
                     log_info(f"Processing Page {page_num} for keyword: {keyword}", module="MAIN")
                     
                     if page_num == 1:
                         scroll_loops = CONFIG["SEARCH_SETTINGS"].get("SCROLL_LOOPS", 2)
                         success = perform_search(page, keyword, captcha_detector, scroll_loops)
                         if not success:
-                            break # Skip to next keyword if initial search fails
+                            break 
                     else:
-                        # Navigate to next page using URL param
-                        # We need the current base URL. 
-                        # Assuming we are on a search results page
                         current_url = page.url
                         if "linkedin.com/search/results" not in current_url:
                             log_warn("Lost search context, aborting pagination.", module="MAIN")
@@ -130,134 +170,92 @@ def main():
                         
                         log_info(f"Navigating to page {page_num}: {new_url}", module="MAIN")
                         page.goto(new_url)
-                        time.sleep(random.randint(5, 8))
+                        
+                        # Interruptible Sleep for loading
+                        if interruptible_sleep(random.randint(5, 8)) == 'q': raise KeyboardInterrupt("Quit")
+                        
                         captcha_detector.check_for_captcha(page)
                         human_scroll(page)
                     
                     # Process Results on Current Page
-                    # -------------------------------
-                    # Collect profiles
+                    candidates = []
                     try:
-                        # Wait for results to be visible
-                        # We try a few common containers. 
-                        # If specific classes fail, we wait for ANY link that looks like a profile
+                        # Wait for results
                         try:
                             page.wait_for_selector("ul.reusable-search__entity-result-list, .search-results-container, div.entity-result, a[href*='/in/']", timeout=15000)
                         except:
-                            log_warn("Standard selectors timed out. Checking for page content...", module="MAIN")
+                            log_warn("Standard selectors timed out.", module="MAIN")
                         
-                        # Verify we actually have results by looking for profile links
-                        # This is the ultimate fallback: if there are profile links, we have results.
                         profile_links_count = page.locator("a[href*='/in/']").count()
                         if profile_links_count == 0:
                              log_warn(f"No profile links found on page {page_num}.", module="MAIN")
                              break
                              
-                    except Exception as e:
-                        log_warn(f"Error checking results page {page_num}: {e}", module="MAIN")
-                        break
+                        # SCAN STEP
+                        results = page.locator("ul.reusable-search__entity-result-list > li").all()
+                        if not results: results = page.locator("div[data-view-name='people-search-result']").all()
+                        if not results: results = page.locator("ul.reusable-search__entity-result-list > li, li.reusable-search__result-container, div[data-view-name='people-search-result']").all()
 
-                    # ---------------------------------------------------------
-                    # SCAN STEP: Identify Candidates with "Connect" buttons
-                    # ---------------------------------------------------------
-                    candidates = []
-                    
-                    # Get all result containers (more stable than getting links first)
-                    # We look for the main list items
-                    # Try explicit list item selector first
-                    results = page.locator("ul.reusable-search__entity-result-list > li").all()
-                    
-                    if not results:
-                        results = page.locator("div[data-view-name='people-search-result']").all()
+                        log_info(f"Scanning {len(results)} results...", module="MAIN")
+                        
+                        for res in results:
+                            # Quick check
+                            if msvcrt.kbhit():
+                                if msvcrt.getch().decode('utf-8').lower() == 'q': raise KeyboardInterrupt("Quit")
 
-                    if not results:
-                        # Fallback: custom list item role
-                        # results = page.get_by_role("list").filter(has=page.locator("a[href*='/in/']")).first.get_by_role("listitem").all()
-                        # Revert: The listitem role might be catching filtered out visible items or wrong lists
-                        # Using the explicit class is safer for the *Container* identification
-                        results = page.locator("ul.reusable-search__entity-result-list > li, li.reusable-search__result-container, div[data-view-name='people-search-result']").all()
-
-                    log_info(f"Scanning {len(results)} results for 'Connect' buttons...", module="MAIN")
-                    
-                    for res in results:
-                        try:
-                            # 1. Extract URL (Robust)
-                            link_el = res.locator("a[href*='/in/']").first
-                            
-                            if not link_el.is_visible(): continue
-                            
-                            raw_url = link_el.get_attribute("href")
-                            if not raw_url: continue
-                            
-                            url = raw_url.split("?")[0].rstrip("/")
-                            if "/in/" not in url or "linkedin.com" not in url:
-                                if url.startswith("/in/"):
-                                    url = "https://www.linkedin.com" + url
-                                else:
-                                    continue
-                            
-                            if sheets_client.is_profile_processed(url):
-                                continue
-
-                            # 2. Check for "Connect" Button (Robust Strategy)
-                            has_connect = False
-                            
-                            # Strategy Zero: View Name Identifier (Specific to this UI)
-                            # Detected from debug logs: data-view-name="edge-creation-connect-action"
-                            if res.locator("div[data-view-name='edge-creation-connect-action']").count() > 0:
-                                has_connect = True
+                            try:
+                                link_el = res.locator("a[href*='/in/']").first
+                                if not link_el.is_visible(): continue
+                                raw_url = link_el.get_attribute("href")
+                                if not raw_url: continue
+                                url = raw_url.split("?")[0].rstrip("/")
+                                if "/in/" not in url: continue
+                                if not url.startswith("http"): url = "https://www.linkedin.com" + url
                                 
-                            # Strategy A: Role "button" (Standard accessibility)
-                            # Regex updated to catch "Invite [Name] to connect"
-                            elif res.get_by_role("button", name=re.compile(r"(^Connect|Invite .+ to connect)", re.IGNORECASE)).count() > 0:
-                                has_connect = True
-                                
-                            # Strategy B: Role "link" (LinkedIn often uses <a> for actions)
-                            elif res.get_by_role("link", name=re.compile(r"(^Connect|Invite .+ to connect)", re.IGNORECASE)).count() > 0:
-                                has_connect = True
-                                
-                            # Strategy C: Aria-Label on button OR link
-                            # Matches "Connect" or "Invite ... to connect" 
-                            elif res.locator("button[aria-label*='to connect'], a[aria-label*='to connect'], button[aria-label^='Connect'], a[aria-label^='Connect']").count() > 0:
-                                has_connect = True
+                                if sheets_client.is_profile_processed(url): continue
 
-                            # Strategy D: Text Content (Last Resort)
-                            if not has_connect:
-                                candidates_btn = res.locator("button, a").filter(has_text=re.compile(r"Connect", re.IGNORECASE)).all()
-                                for b in candidates_btn:
-                                    if b.is_visible():
-                                        t = b.inner_text().strip()
-                                        if "Connect" in t and "Connected" not in t and "Pending" not in t and "Message" not in t:
+                                # Check Connect
+                                has_connect = False
+                                if res.locator("div[data-view-name='edge-creation-connect-action']").count() > 0: has_connect = True
+                                elif res.get_by_role("button", name=re.compile(r"(^Connect|Invite .+ to connect)", re.IGNORECASE)).count() > 0: has_connect = True
+                                elif res.get_by_role("link", name=re.compile(r"(^Connect|Invite .+ to connect)", re.IGNORECASE)).count() > 0: has_connect = True
+                                elif res.locator("button[aria-label*='to connect'], a[aria-label*='to connect']").count() > 0: has_connect = True # Simplified
+                                
+                                if not has_connect:
+                                    candidates_btn = res.locator("button, a").filter(has_text=re.compile(r"Connect", re.IGNORECASE)).all()
+                                    for b in candidates_btn:
+                                        if b.is_visible() and "Connect" in b.inner_text() and "Connected" not in b.inner_text():
                                             has_connect = True
                                             break
-                            
-                            if has_connect:
-                                candidates.append({"url": url, "element": link_el})
+                                
+                                if has_connect:
+                                    candidates.append({"url": url, "element": link_el})
 
-                        except Exception as e:
-                            log_warn(f"Error scanning result item: {e}", module="MAIN")
-                            continue
+                            except: continue
                             
-                    log_info(f"Found {len(candidates)} connectable profiles on this page.", module="MAIN")
+                        log_info(f"Found {len(candidates)} candidates.", module="MAIN")
+                        if not candidates: human_scroll(page)
+                    
+                    except Exception as e:
+                        log_warn(f"Error checking page {page_num}: {e}", module="MAIN")
+                        break
 
-                    if not candidates:
-                        log_info("No candidates found, scrolling/moving to next page.", module="MAIN")
-                        # Optional: Scroll one more time just in case? 
-                        human_scroll(page)
-                    
-                    # ---------------------------------------------------------
-                    # ACTION STEP: Process Candidates
-                    # ---------------------------------------------------------
-                    
+                    # ACTION STEP
                     for i, candidate in enumerate(candidates):
+                        # Use interruptible sleep for breaks? 
+                        # Or check input before action
+                        cmd = check_keyboard_input()
+                        if cmd == 's': 
+                            log_info("Skipping remaining candidates...", module="INPUT")
+                            break
+                        if cmd == 'q': raise KeyboardInterrupt("Quit command received")
+
                         url = candidate["url"]
                         link_el = candidate["element"]
                         
-                        # Double check limits
                         count_visits = state_manager.get_var("daily_visits_count", 0)
-                        
                         if count_visits >= CONFIG["LIMITS"]["PROFILE_VISITS_PER_DAY"]:
-                            log_warn("Daily visit limit reached. Stopping search.", module="MAIN")
+                            log_warn("Daily visit limit reached.", module="MAIN")
                             break
 
                         if rate_limiter.can_perform("profile_visits"):
@@ -265,19 +263,17 @@ def main():
                             
                             new_page = None
                             try:
-                                # Scroll to element safely
                                 try: link_el.scroll_into_view_if_needed()
                                 except: pass
                                 
-                                # CTRL+CLICK to open in new tab
                                 with page.context.expect_page() as new_page_info:
-                                    time.sleep(random.uniform(0.5, 1.5))
+                                    # Small sleep before click
+                                    if interruptible_sleep(random.uniform(0.5, 1.5)) == 'q': raise KeyboardInterrupt
                                     link_el.click(modifiers=["Control"])
                                 
                                 new_page = new_page_info.value
                                 new_page.wait_for_load_state()
                                 
-                                # Process in New Tab
                                 visited = visit_profile(new_page, url, captcha_detector, skip_navigation=True)
                                 
                                 if visited:
@@ -287,43 +283,55 @@ def main():
                                          row = [str(datetime.datetime.now()), "VISIT", url, "SUCCESS", "N/A"]
                                          sheets_client.append_interaction(row)
                                     
-                                    # Extract
                                     data = extract_profile_data(new_page)
-                                    
-                                    # Connect
                                     if rate_limiter.can_perform("connections"):
                                         note = generate_note(data)
                                         sent = send_connection_request(new_page, note, rate_limiter)
-                                        
                                         status = "SENT" if sent else "SKIPPED/FAILED"
                                         sheets_client.append_profile_request(data, note, status)
                                 
-                                log_info("Closing profile tab...", module="MAIN")
                                 new_page.close()
                                 page.bring_to_front()
                                 
                             except Exception as px_e:
-                                log_error(f"Error processing profile in tab: {px_e}", module="MAIN")
+                                log_error(f"Error in tab: {px_e}", module="MAIN")
                                 if new_page:
                                     try: new_page.close()
                                     except: pass
                                 page.bring_to_front()
 
-                        time.sleep(random.randint(10, 25))
+                        # Interruptible long sleep between profiles
+                        wait_time = random.randint(10, 25)
+                        log_info(f"Waiting {wait_time}s...", module="MAIN")
+                        res = interruptible_sleep(wait_time)
+                        if res == 'q': raise KeyboardInterrupt("Quit")
+                        if res == 's': 
+                             log_info("Skipping wait/next...", module="INPUT")
+                             # 's' during wait might just skip the wait, or skip to next candidate? 
+                             # Let's say it skips the wait.
+                             pass
 
-                    log_info("Finished page. Preparing for next page...", module="MAIN")
-                    
-                    # We continue loop to next page_num
+                    log_info("Finished page. Next...", module="MAIN")
 
-
-                # Update index ONLY after finishing all pages for this keyword
                 state_manager.set_var("search_term_index", idx + 1)
             
             # 6. Random Long Break
-            scheduler.take_random_break("LONG_BREAK")
+            log_info("Taking long break...", module="MAIN")
+            # We need to manually handle this if we want it interruptible, 
+            # OR we trust the "q" check before it? 
+            # scheduler.take_random_break uses regular sleep. 
+            # Let's override or just sleep here.
+            # scheduler.take_random_break("LONG_BREAK") 
+            # -> let's do manual interruptible sleep
+            # config defaults might be 10-20 mins? 
+            # Let's allow skip 's' to skip break.
+            
+            break_duration = random.randint(CONFIG["DELAYS"]["LONG_BREAK_MIN"], CONFIG["DELAYS"]["LONG_BREAK_MAX"])
+            log_info(f"Long Break: {break_duration}s (Press 's' to skip)", module="SCHEDULER")
+            if interruptible_sleep(break_duration) == 'q': break
             
     except KeyboardInterrupt:
-        log_info("Manual Stop detected.")
+        log_info("Manual Stop detected (or 'q' pressed).")
     except Exception as e:
         log_fatal(f"CRITICAL SYSTEM FAILURE: {e}")
         notifier.send_alert("System Crash", str(e))
