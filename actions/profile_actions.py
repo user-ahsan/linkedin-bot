@@ -5,17 +5,24 @@ from core.human_actions import random_delay, human_scroll
 from core.captcha_detector import CaptchaDetector
 from config.config import CONFIG
 
-def visit_profile(page, url, captcha_detector: CaptchaDetector):
+def visit_profile(page, url, captcha_detector: CaptchaDetector, skip_navigation=False):
     """
     Navigates to a profile with safety checks.
     """
     try:
         log_info(f"Visiting profile: {url}", module="PROFILE")
-        # 2.1 Navigation (domcontentloaded is faster/safer than networkidle)
-        try:
-            page.goto(url, wait_until='domcontentloaded', timeout=CONFIG["EXTRACTION"]["WAIT_TIMEOUT"] + 5000)
-        except Exception as e:
-             log_warn(f"Page load timeout/error: {e}", module="PROFILE")
+        
+        # 2.1 Navigation
+        if not skip_navigation:
+            try:
+                page.goto(url, wait_until='domcontentloaded', timeout=CONFIG["EXTRACTION"]["WAIT_TIMEOUT"] + 5000)
+            except Exception as e:
+                 log_warn(f"Page load timeout/error: {e}", module="PROFILE")
+        else:
+            log_info("Skipping navigation (Tab context)", module="PROFILE")
+            try:
+                page.wait_for_load_state("domcontentloaded")
+            except: pass
 
         # 2.2 Page Validation (Abort Early)
         # Check for unavailable or captcha

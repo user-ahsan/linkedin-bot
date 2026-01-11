@@ -33,21 +33,32 @@ class BrowserManager:
                 except Exception as cleanup_err:
                     print(f"Warning: Could not clean up profile locks: {cleanup_err}")
 
+                # Stealth Arguments
+                stealth_args = [
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-infobars",
+                    "--excludeSwitches=enable-automation",
+                    "--use-fake-ui-for-media-stream",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-extensions",
+                    "--disable-popup-blocking",
+                ]
+
                 # Using launch_persistent_context to maintain login session
                 self.context = self.playwright.chromium.launch_persistent_context(
                     user_data_dir=full_user_data_dir,
                     headless=headless_mode,
                     channel="chrome", # Try to use installed chrome or default
-                    args=[
-                        "--disable-blink-features=AutomationControlled",
-                        "--start-maximized",
-                        "--no-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--disable-gpu"
-                    ],
+                    args=stealth_args,
                     viewport=None, # Uses actual window size
-                    timeout=30000
+                    timeout=30000,
+                    ignore_default_args=["--enable-automation"]  # Crucial for hiding automation bar
                 )
+                
+                # Apply Stealth Scripts
+                self.context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
                 
                 # Get the first page or create new one
                 if len(self.context.pages) > 0:

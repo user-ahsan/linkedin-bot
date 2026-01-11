@@ -232,7 +232,7 @@ def main():
                                             break
                             
                             if has_connect:
-                                candidates.append(url)
+                                candidates.append({"url": url, "element": link_el})
 
                         except Exception as e:
                             log_warn(f"Error scanning result item: {e}", module="MAIN")
@@ -249,52 +249,69 @@ def main():
                     # ACTION STEP: Process Candidates
                     # ---------------------------------------------------------
                     
-                    # Store current Search URL to return to
-                    search_page_url = page.url
-                    
-                    for i, url in enumerate(candidates):
-                         # Double check limits
-                        count_visits = state_manager.get_var("daily_visits_count", 0) # Just an example, or rely on rate_limiter
-                        # Actually rate_limiter handles simple counts, but let's check config limits
+                    for i, candidate in enumerate(candidates):
+                        url = candidate["url"]
+                        link_el = candidate["element"]
+                        
+                        # Double check limits
+                        count_visits = state_manager.get_var("daily_visits_count", 0)
                         
                         if count_visits >= CONFIG["LIMITS"]["PROFILE_VISITS_PER_DAY"]:
                             log_warn("Daily visit limit reached. Stopping search.", module="MAIN")
                             break
 
-                        # Visit
                         if rate_limiter.can_perform("profile_visits"):
                             log_info(f"[{i+1}/{len(candidates)}] Processing: {url}", module="MAIN")
-                            visited = visit_profile(page, url, captcha_detector)
-                            if visited:
-                                rate_limiter.increment("profile_visits")
+                            
+                            new_page = None
+                            try:
+                                # Scroll to element safely
+                                try: link_el.scroll_into_view_if_needed()
+                                except: pass
                                 
-                                if sheets_client:
-                                     import datetime
-                                     row = [str(datetime.datetime.now()), "VISIT", url, "SUCCESS", "N/A"]
-                                     sheets_client.append_interaction(row)
+                                # CTRL+CLICK to open in new tab
+                                with page.context.expect_page() as new_page_info:
+                                    time.sleep(random.uniform(0.5, 1.5))
+                                    link_el.click(modifiers=["Control"])
                                 
-                                # Extract
-                                data = extract_profile_data(page)
+                                new_page = new_page_info.value
+                                new_page.wait_for_load_state()
                                 
-                                # Connect
-                                if rate_limiter.can_perform("connections"):
-                                    note = generate_note(data)
-                                    sent = send_connection_request(page, note, rate_limiter)
+                                # Process in New Tab
+                                visited = visit_profile(new_page, url, captcha_detector, skip_navigation=True)
+                                
+                                if visited:
+                                    rate_limiter.increment("profile_visits")
+                                    if sheets_client:
+                                         import datetime
+                                         row = [str(datetime.datetime.now()), "VISIT", url, "SUCCESS", "N/A"]
+                                         sheets_client.append_interaction(row)
                                     
-                                    status = "SENT" if sent else "SKIPPED/FAILED"
-                                    sheets_client.append_profile_request(data, note, status)
+                                    # Extract
+                                    data = extract_profile_data(new_page)
+                                    
+                                    # Connect
+                                    if rate_limiter.can_perform("connections"):
+                                        note = generate_note(data)
+                                        sent = send_connection_request(new_page, note, rate_limiter)
+                                        
+                                        status = "SENT" if sent else "SKIPPED/FAILED"
+                                        sheets_client.append_profile_request(data, note, status)
                                 
-                        # Random delay between profiles
-                        time.sleep(random.randint(5, 10))
+                                log_info("Closing profile tab...", module="MAIN")
+                                new_page.close()
+                                page.bring_to_front()
+                                
+                            except Exception as px_e:
+                                log_error(f"Error processing profile in tab: {px_e}", module="MAIN")
+                                if new_page:
+                                    try: new_page.close()
+                                    except: pass
+                                page.bring_to_front()
 
-                    # End of Page Processing
-                    # Restore Search Context for Next Page Navigation
-                    log_info("Restoring search context...", module="MAIN")
-                    try:
-                        page.goto(search_page_url, wait_until='domcontentloaded')
-                        time.sleep(3)
-                    except Exception as nav_e:
-                        log_warn(f"Failed to restore search context: {nav_e}", module="MAIN")
+                        time.sleep(random.randint(10, 25))
+
+                    log_info("Finished page. Preparing for next page...", module="MAIN")
                     
                     # We continue loop to next page_num
 
